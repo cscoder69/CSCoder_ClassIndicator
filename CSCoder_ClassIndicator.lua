@@ -43,6 +43,7 @@ local DEFAULTS = {
 	textOutline = "OUTLINE", -- "" | OUTLINE | THICKOUTLINE
 	textShadow = true,
 	healerMark = true,     -- green cross on classes that can heal
+	healerOutline = true,   -- dark outline around the healer cross
 	targetBigger = true,   -- your current target's icon is bigger
 	targetScale = 1.3,
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
@@ -272,6 +273,7 @@ function Indicator.Style(f, class, name, isTarget)
 		local p = healer.parts
 		p[1]:SetSize(s + 2, bar + 2); p[2]:SetSize(bar + 2, s + 2)
 		p[3]:SetSize(s, bar); p[4]:SetSize(bar, s)
+		p[1]:SetShown(db.healerOutline); p[2]:SetShown(db.healerOutline)
 		healer:Show()
 	else
 		healer:Hide()
@@ -900,6 +902,7 @@ do
 		Heading(page, "PvP", COL3, y)
 		Gate(AddCheck(page, "Mark healer classes", "healerMark", COL3, y - 24,
 			"A green cross on classes that can heal (Priest, Druid, Paladin, Shaman...). Usually the first one to kill."), On)
+		Gate(AddCheck(page, "Cross outline", "healerOutline", COL3 + 190, y - 24), function() return db.enabled and db.healerMark end)
 		Gate(AddCheck(page, "Bigger icon on your target", "targetBigger", COL3, y - 50), On)
 		Gate(AddSlider(page, "Target size", "targetScale", 1, 2, 0.05, COL3, y - 74).slider,
 			function() return db.enabled and db.targetBigger end)
