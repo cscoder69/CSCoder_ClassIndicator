@@ -52,7 +52,7 @@ local DEFAULTS = {
 	targetScale = 1.3,
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
-	clickable = true,      -- enlarge the game's nameplate click box to cover the icon
+	clickArea = false,     -- enlarge the game's nameplate click box to cover the icon (OFF: Plater draws its target lines on that box)
 	targetGlow = true,     -- pulsing glow around your target's icon
 	glowColor = { 1, 0.82, 0, 1 },
 }
@@ -70,7 +70,7 @@ end
 local root
 local function FillDefaults(profile)
 	if profile.borderMode == "none" then profile.border, profile.borderMode = false, "class" end -- old "No border"
-	profile.targetArrows, profile.arrowColor, profile.clickTarget, profile.version = nil, nil, nil, nil -- removed
+	profile.targetArrows, profile.arrowColor, profile.clickTarget, profile.version, profile.clickable = nil, nil, nil, nil, nil -- removed
 	for key, value in pairs(DEFAULTS) do
 		if type(profile[key]) ~= type(value) then profile[key] = CopyValue(value) end
 	end
@@ -455,7 +455,7 @@ end
 -- nameplate addon share it), so it is enlarged to cover the icon. Whoever sets the size (the game,
 -- Plater...) stays in charge of the base; this only adds what the icon needs on top. Sizes can
 -- only change out of combat (re-applied when it ends).
-local ClickArea = { base = {}, busy = false, pending = false }
+local ClickArea = { base = {}, changed = {}, busy = false, pending = false }
 function ClickArea.Needed()
 	-- (the target's bigger icon doesn't count: it is already your target)
 	local mult = 1
@@ -480,10 +480,14 @@ function ClickArea.Apply(kind) -- "Enemy" | "Friendly"
 		ClickArea.base[kind] = base
 	end
 	local w, h = base[1], base[2]
-	if db.enabled and db.clickable and (kind == "Enemy" or db.friends or testMode) then
+	local want = db.enabled and db.clickArea and (kind == "Enemy" or db.friends or testMode)
+	-- Off and never changed this session: leave the size alone (it belongs to the game / Plater).
+	if not want and not ClickArea.changed[kind] then return end
+	if want then
 		local nw, nh = ClickArea.Needed()
 		w, h = math.max(w, nw), math.max(h, nh)
 	end
+	ClickArea.changed[kind] = want or nil
 	if InCombatLockdown() then ClickArea.pending = true return end
 	ClickArea.busy = true
 	local ok = pcall(setter, w, h)
@@ -867,6 +871,220 @@ do
 		return buttons
 	end
 
+	-- Profile sharing: the active profile as one line ("CCI1:key=value;..."), to copy to a friend
+	-- or another PC and back. Values: b1/b0, nNUM, sTEXT, cR,G,B,A (colour), lCLASS,CLASS (list).
+	-- Only known settings of the right type are read back.
+	local Share = {}
+	local function Escape(text) return (tostring(text):gsub("[%%;=:,]", function(c) return string.format("%%%02X", c:byte()) end)) end
+	local function Unescape(text) return (text:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)) end
+	function Share.Encode()
+		local keys = {}
+		for key in pairs(DEFAULTS) do keys[#keys + 1] = key end
+		table.sort(keys)
+		local parts = {}
+		for _, key in ipairs(keys) do
+			local v, kind = db[key], type(DEFAULTS[key])
+			local text
+			if kind == "boolean" then text = v and "b1" or "b0"
+			elseif kind == "number" then text = "n" .. tostring(v)
+			elseif kind == "string" then text = "s" .. Escape(v)
+			elseif key == "bigClasses" then
+				local list = {}
+				for class in pairs(v) do list[#list + 1] = class end
+				table.sort(list)
+				text = "l" .. table.concat(list, ",")
+			else
+				text = string.format("c%.3f,%.3f,%.3f,%.3f", v[1] or 1, v[2] or 1, v[3] or 1, v[4] or 1)
+			end
+			parts[#parts + 1] = key .. "=" .. text
+		end
+		return "CCI1:" .. table.concat(parts, ";")
+	end
+	-- Returns how many settings were taken, or nil when the text isn't a profile.
+	function Share.Decode(text)
+		text = (text or ""):match("^%s*(.-)%s*$")
+		local body = text:match("^CCI1:(.*)$")
+		if not body then return nil end
+		local count = 0
+		for key, value in body:gmatch("([%w_]+)=([^;]*)") do
+			local default = DEFAULTS[key]
+			local tag, rest = value:sub(1, 1), value:sub(2)
+			if type(default) == "boolean" and tag == "b" then
+				db[key] = rest == "1"; count = count + 1
+			elseif type(default) == "number" and tag == "n" and tonumber(rest) then
+				db[key] = tonumber(rest); count = count + 1
+			elseif type(default) == "string" and tag == "s" then
+				db[key] = Unescape(rest); count = count + 1
+			elseif key == "bigClasses" and tag == "l" then
+				local list = {}
+				for class in rest:gmatch("[%u]+") do if OWN_COORDS[class] then list[class] = true end end
+				db[key] = list; count = count + 1
+			elseif type(default) == "table" and tag == "c" then
+				local r, g, b, a = rest:match("^([%d%.]+),([%d%.]+),([%d%.]+),([%d%.]+)$")
+				if r then db[key] = { tonumber(r), tonumber(g), tonumber(b), tonumber(a) }; count = count + 1 end
+			end
+		end
+		return count
+	end
+
+	local shareWindow
+	local function OpenShare(mode)
+		if not shareWindow then
+			local s = CreateFrame("Frame", "CSCoder_ClassIndicatorShare", UIParent)
+			s:SetSize(520, 260)
+			s:SetPoint("CENTER")
+			s:SetFrameStrata("FULLSCREEN_DIALOG")
+			s:EnableMouse(true)
+			s:SetMovable(true)
+			s:RegisterForDrag("LeftButton")
+			s:SetScript("OnDragStart", s.StartMoving)
+			s:SetScript("OnDragStop", s.StopMovingOrSizing)
+			Fill(s, 0.09, 0.08, 0.06, 0.98)
+			Edges(s, GOLD[1], GOLD[2], GOLD[3], 0.8)
+			table.insert(UISpecialFrames, s:GetName())
+			s.title = s:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+			s.title:SetPoint("TOPLEFT", 16, -14)
+			s.hint = s:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+			s.hint:SetPoint("TOPLEFT", 16, -40)
+			s.hint:SetWidth(488)
+			s.hint:SetJustifyH("LEFT")
+			local scroll = CreateFrame("ScrollFrame", nil, s, "UIPanelScrollFrameTemplate")
+			scroll:SetPoint("TOPLEFT", 16, -64)
+			scroll:SetPoint("BOTTOMRIGHT", -36, 48)
+			local box = CreateFrame("EditBox", nil, scroll)
+			box:SetMultiLine(true)
+			box:SetAutoFocus(false)
+			box:SetFontObject("ChatFontSmall")
+			box:SetWidth(460)
+			box:SetScript("OnEscapePressed", function() s:Hide() end)
+			scroll:SetScrollChild(box)
+			s.box = box
+			local close = Button(s, "Close", 100)
+			close:SetPoint("BOTTOMRIGHT", -16, 14)
+			close:SetScript("OnClick", function() s:Hide() end)
+			s.import = Button(s, "Import", 100)
+			s.import:SetPoint("RIGHT", close, "LEFT", -8, 0)
+			s.import:SetScript("OnClick", function()
+				local count = Share.Decode(box:GetText())
+				if count then
+					FillDefaults(db)
+					Changed()
+					print(string.format("|cffffd200%s|r: %d settings imported into \"%s\".", TITLE, count, Profiles.Current()))
+					s:Hide()
+				else
+					s.hint:SetText("|cffff5050That text isn't a Class Indicator profile (it starts with CCI1:).|r")
+				end
+			end)
+			shareWindow = s
+		end
+		local s = shareWindow
+		if mode == "export" then
+			s.title:SetText("Export profile")
+			s.hint:SetText("Press Ctrl+C to copy this text, then send it to a friend or paste it on another PC.")
+			s.box:SetText(Share.Encode())
+			s.import:Hide()
+		else
+			s.title:SetText("Import profile")
+			s.hint:SetText("Paste a profile text (Ctrl+V) and click Import. It replaces the current profile's settings.")
+			s.box:SetText("")
+			s.import:Show()
+		end
+		s:Show()
+		s.box:SetFocus()
+		if mode == "export" then s.box:HighlightText() end
+	end
+
+	-- Profiles tab, laid out like Quest Indicator's (Ace3 style).
+	local function BuildProfilesTab(tab)
+		local LEFT, TOP, WIDTH = 40, -64, 620
+		local function Desc(text, y)
+			local fs = tab:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+			fs:SetPoint("TOPLEFT", LEFT, y)
+			fs:SetWidth(WIDTH)
+			fs:SetJustifyH("LEFT")
+			fs:SetText(text)
+			return fs
+		end
+		local function Others()
+			local list = {}
+			for _, name in ipairs(Profiles.Names()) do
+				if name ~= Profiles.Current() then list[#list + 1] = { name, name } end
+			end
+			if #list == 0 then list[1] = { "", "(no other profile)" } end
+			return list
+		end
+		local function All()
+			local list = {}
+			for _, name in ipairs(Profiles.Names()) do list[#list + 1] = { name, name } end
+			return list
+		end
+		local function Nothing() return "" end
+
+		Desc("Profiles let each character have its own settings.", TOP)
+
+		Desc("Put the current profile back to its default settings.", TOP - 24)
+		local reset = Button(tab, "Reset Profile", 160)
+		reset:SetPoint("TOPLEFT", LEFT, TOP - 42)
+		reset:SetScript("OnClick", function() ResetSettings(); Changed() end)
+
+		local current = tab:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+		current:SetPoint("TOPLEFT", LEFT, TOP - 80)
+
+		Desc("Create a new profile by typing a name, or pick an existing one.", TOP - 106)
+		Label(tab, "New", LEFT, TOP - 126)
+		local input = CreateFrame("EditBox", nil, tab, "InputBoxTemplate")
+		input:SetSize(200, 22)
+		input:SetPoint("TOPLEFT", LEFT + 6, TOP - 144)
+		input:SetAutoFocus(false)
+		input:SetMaxLetters(32)
+		input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+		input:SetScript("OnEnterPressed", function(self)
+			local name = (self:GetText() or ""):match("^%s*(.-)%s*$")
+			self:SetText("")
+			self:ClearFocus()
+			if name == "" then return end
+			Profiles.Use(name)
+			Changed()
+		end)
+		AddDropdown(tab, "Existing Profiles", { get = Profiles.Current, set = function(name) Profiles.Use(name) end },
+			All, LEFT + 294, TOP - 126)
+
+		Desc("Copy the settings of another profile into the current one.", TOP - 186)
+		AddDropdown(tab, "Copy From", { get = Nothing, set = function(name)
+			if name ~= "" then Profiles.CopyFrom(name) end
+		end }, Others, LEFT + 4, TOP - 206)
+
+		Desc("Delete profiles you no longer use.", TOP - 266)
+		AddDropdown(tab, "Delete a Profile", { get = Nothing, set = function(name)
+			if name == "" then return end
+			StaticPopupDialogs.CSCODER_CI_DELETE_PROFILE = {
+				text = "Delete the profile \"%s\"?", button1 = YES, button2 = NO,
+				OnAccept = function(_, data) Profiles.Delete(data); Changed() end,
+				timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+			}
+			StaticPopup_Show("CSCODER_CI_DELETE_PROFILE", name, nil, name)
+		end }, function()
+			local list = {}
+			for _, option in ipairs(Others()) do if option[1] ~= "Default" then list[#list + 1] = option end end
+			if #list == 0 then list[1] = { "", "(nothing to delete)" } end
+			return list
+		end, LEFT + 4, TOP - 286)
+
+		Desc("Share the current profile: export it as text, or import a text someone sent you.", TOP - 346)
+		local export = Button(tab, "Export profile", 160)
+		export:SetPoint("TOPLEFT", LEFT, TOP - 366)
+		export:SetScript("OnClick", function() OpenShare("export") end)
+		local import = Button(tab, "Import profile", 160)
+		import:SetPoint("LEFT", export, "RIGHT", 8, 0)
+		import:SetScript("OnClick", function() OpenShare("import") end)
+
+		local function Sync()
+			current:SetText("Current Profile: |cffffffff" .. tostring(Profiles.Current()) .. "|r")
+		end
+		refreshers[#refreshers + 1] = Sync
+		tab:HookScript("OnShow", Sync)
+	end
+
 	local function Refresh()
 		for _, refresh in ipairs(refreshers) do refresh() end
 		if UpdatePreview then UpdatePreview() end
@@ -874,7 +1092,7 @@ do
 
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(1060, 760)
+		window:SetSize(1060, 750)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -900,9 +1118,37 @@ do
 		close:SetPoint("TOPRIGHT", -10, -10)
 		close:SetScript("OnClick", function() window:Hide() end)
 
-		UpdatePreview = BuildPreview(window)
+		-- Two tabs, like Quest Indicator: Settings (preview + options) and Profiles.
+		local settingsTab = CreateFrame("Frame", nil, window)
+		settingsTab:SetAllPoints()
+		local profilesTab = CreateFrame("Frame", nil, window)
+		profilesTab:SetAllPoints()
+		local tabButtons = {}
+		local function SelectTab(index)
+			CloseList()
+			settingsTab:SetShown(index == 1)
+			profilesTab:SetShown(index == 2)
+			for i, b in ipairs(tabButtons) do
+				local on = i == index
+				b.selected:SetShown(on)
+				b.label:SetTextColor(on and 1 or 0.75, on and 0.9 or 0.7, on and 0.6 or 0.6)
+			end
+		end
+		for i, text in ipairs({ "Settings", "Profiles" }) do
+			local b = Button(window, text, 110)
+			b:SetPoint("TOPLEFT", 330 + (i - 1) * 116, -12)
+			b.selected = b:CreateTexture(nil, "ARTWORK", nil, -1)
+			b.selected:SetAllPoints()
+			b.selected:SetColorTexture(1, 0.82, 0, 0.22)
+			b:SetScript("OnClick", function() SelectTab(i) end)
+			tabButtons[i] = b
+		end
 
-		local page = CreateFrame("Frame", nil, window)
+		UpdatePreview = BuildPreview(settingsTab)
+		BuildProfilesTab(profilesTab)
+		SelectTab(1)
+
+		local page = CreateFrame("Frame", nil, settingsTab)
 		page:SetPoint("TOPLEFT", 0, -224)
 		page:SetPoint("BOTTOMRIGHT")
 		page:EnableMouse(true)
@@ -987,69 +1233,13 @@ do
 			Gate(b, On)
 		end
 		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
-		Gate(AddCheck(page, "Clickable icon", "clickable", COL3, y - 278,
-			"Clicking the icon targets that player. It enlarges the game's own nameplate click area to cover the icon (works with the default UI and nameplate addons). Changes apply out of combat."), On)
+		Gate(AddCheck(page, "Clickable icon", "clickArea", COL3, y - 278,
+			"Clicking the icon targets that player: it makes the nameplate's click area taller to cover the icon. Off by default: nameplate addons that draw on that area (like Plater's target lines) get stretched. Changes apply out of combat."), On)
 		Gate(AddCheck(page, "Glow on your target", "targetGlow", COL3, y - 226,
 			"A pulsing glow around your current target's icon (only the icon, not the name)."), On)
 		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 226),
 			function() return db.enabled and db.targetGlow end)
 
-		local reset = Button(page, "Reset profile", 110)
-		reset:SetPoint("BOTTOMLEFT", COL1, 16)
-		reset:SetScript("OnClick", function() ResetSettings(); Refresh(); Changed() end)
-		Tooltip(reset, "Puts every option of the current profile back to the defaults.")
-
-		-- Profiles bar: current profile, new, copy from, delete (lists open upwards).
-		local barY = -(760 - 224) + 58 -- window height minus the preview area
-		local function Others(withDefault)
-			local list = {}
-			for _, name in ipairs(Profiles.Names()) do
-				if name ~= Profiles.Current() and (withDefault or name ~= "Default") then list[#list + 1] = { name, name } end
-			end
-			if #list == 0 then list[1] = { "", "(no other profile)" } end
-			return list
-		end
-		local current = AddDropdown(page, "Profile (this character)", { get = Profiles.Current,
-			set = function(name) Profiles.Use(name) end },
-			function() local list = {} for _, n in ipairs(Profiles.Names()) do list[#list + 1] = { n, n } end return list end,
-			160, barY, "Each character uses one profile. Characters can share a profile.")
-		current.openUp = true
-		local new = Button(page, "New profile", 100)
-		new:SetPoint("TOPLEFT", 372, barY - 16)
-		new:SetScript("OnClick", function() StaticPopup_Show("CSCODER_CI_NEW_PROFILE") end)
-		Tooltip(new, "A new profile with the default options, used by this character.")
-		local copy = AddDropdown(page, "Copy from", { get = function() return "" end,
-			set = function(name) if name ~= "" then Profiles.CopyFrom(name) end end },
-			function() return Others(true) end, 492, barY, "Copies every option of that profile into the current one.")
-		copy.openUp = true
-		local delete = AddDropdown(page, "Delete a profile", { get = function() return "" end,
-			set = function(name)
-				if name ~= "" then StaticPopup_Show("CSCODER_CI_DELETE_PROFILE", name, nil, name) end
-			end }, function() return Others(false) end, 712, barY,
-			"Deletes a profile (not \"Default\" nor the one in use). Characters using it go back to \"Default\".")
-		delete.openUp = true
-
-		local function Trim(text) return (string.match(text or "", "^%s*(.-)%s*$")) end
-		local function AcceptNew(popup)
-			local box = popup.editBox or popup.EditBox or (popup.GetEditBox and popup:GetEditBox())
-			local name = box and Trim(box:GetText())
-			if name and name ~= "" then
-				Profiles.Use(name)
-				Changed()
-			end
-		end
-		StaticPopupDialogs.CSCODER_CI_NEW_PROFILE = {
-			text = "Name of the new profile:", button1 = OKAY, button2 = CANCEL, hasEditBox = true,
-			timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
-			OnAccept = AcceptNew,
-			EditBoxOnEnterPressed = function(self) AcceptNew(self:GetParent()); self:GetParent():Hide() end,
-			EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
-		}
-		StaticPopupDialogs.CSCODER_CI_DELETE_PROFILE = {
-			text = "Delete the profile \"%s\"?", button1 = YES, button2 = NO,
-			timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
-			OnAccept = function(_, name) Profiles.Delete(name); Changed() end,
-		}
 		local hint = page:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 		hint:SetPoint("TOPRIGHT", window, "TOPRIGHT", -44, -20)
 		hint:SetText("Mouse wheel on a slider steps it. Type a value and press Enter.")

@@ -50,7 +50,7 @@ setmetatable(env, { __index = function(_, k)
 	return v
 end })
 env._G = env
-env.CreateFrame = function(kind, name) local w = NewWidget(kind); w._name = name; if name then env[name] = w end return w end
+env.CreateFrame = function(kind, name, parent, template) local w = NewWidget(kind); w._name = name; w._template = template; if name then env[name] = w end return w end
 env.UIParent = NewWidget("Frame")
 env.GameTooltip = NewWidget("GameTooltip")
 env.ColorPickerFrame = NewWidget("ColorPickerFrame")
@@ -210,13 +210,13 @@ if ind.glowPulse._scripts.OnUpdate then try("glow pulse", ind.glowPulse._scripts
 ind.SetSize = setSize
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))
-db.clickable, db.anchor, db.offsetY, db.size = true, "top", 14, 28
+db.clickArea, db.anchor, db.offsetY, db.size = true, "top", 14, 28
 env.CSCoderOptionsParent = env.CSCoderOptionsParent
 Fire("PLAYER_ENTERING_WORLD")
 print("click area enlarged (enemy height > 45)", env._enemySize and env._enemySize[2] > 45, env._enemySize and env._enemySize[2])
 env.C_NamePlate.SetNamePlateEnemySize(130, 50) -- another addon sets its own size
 print("other addon size kept as base, ours on top", env._enemySize[1] >= 130 and env._enemySize[2] > 50)
-db.clickable = false; Fire("PLAYER_ENTERING_WORLD")
+db.clickArea = false; Fire("PLAYER_ENTERING_WORLD")
 print("off -> back to the base", env._enemySize[2] == 50)
 print("controls clicked", clicked, "sliders", slid)
 local names = {}
@@ -227,15 +227,33 @@ print("errors:", errors)
 
 -- Profiles.
 local root = env.CSCoderClassIndicatorDB
-print("profiles layout", type(root.profiles) == "table" and root.chars["Tester - Realm"] == "Default")
-local newDialog = env.StaticPopupDialogs.CSCODER_CI_NEW_PROFILE
-local fakeBox = { GetText = function() return "  BG  " end }
-try("new profile", newDialog.OnAccept, { editBox = fakeBox })
+print("profiles layout", type(root.profiles) == "table" and root.chars["Tester - Realm"] ~= nil)
+local input
+for _, f in ipairs(frames) do if f._template == "InputBoxTemplate" then input = f end end
+input._text = "  BG  "
+try("new profile", input._scripts.OnEnterPressed, input)
 print("new profile 'BG' in use", root.chars["Tester - Realm"] == "BG" and type(root.profiles.BG) == "table")
-root.profiles.Default.size = 50
-local delDialog = env.StaticPopupDialogs.CSCODER_CI_DELETE_PROFILE
-try("delete current (refused)", delDialog.OnAccept, nil, "BG")
-print("current profile can't be deleted", root.profiles.BG ~= nil)
+-- Export, change, import back.
+db.size = 37
+local share
+for _, f in ipairs(frames) do if f._name == "CSCoder_ClassIndicatorShare" then share = f end end
+local exportButton, importButton
+for _, f in ipairs(frames) do
+	if f.label and f.label._text == "Export profile" then exportButton = f end
+	if f.label and f.label._text == "Import profile" then importButton = f end
+end
+try("export", exportButton._scripts.OnClick, exportButton)
+for _, f in ipairs(frames) do if f._name == "CSCoder_ClassIndicatorShare" then share = f end end
+local text = share.box._text
+print("export text", type(text) == "string" and text:sub(1, 5) == "CCI1:", text and #text)
+db.size = 20
+try("import open", importButton._scripts.OnClick, importButton)
+share.box._text = text
+try("import", share.import._scripts.OnClick, share.import)
+print("import restores size 37", db.size == 37)
+share.box._text = "garbage"
+try("import garbage", share.import._scripts.OnClick, share.import)
+print("garbage refused, size kept", db.size == 37)
 -- Old flat save migrates into Default.
 env.CSCoderClassIndicatorDB = { enabled = true, size = 40, shape = "square", version = 1 }
 frames = {}
