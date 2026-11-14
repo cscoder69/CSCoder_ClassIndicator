@@ -42,3 +42,17 @@ the layout is approved). Junction already in AddOns. Local git only (ask before 
   because the border was a full shape behind the icon), text on its own layer.
 - Open: the class name didn't show in the first screenshot (Plater, test mode) - check again.
 - Open: "o fundo ta preto" (black background) - not clear yet which background; ask for a print.
+
+## PvP extras (2026-11-14, user: "taca-le o pau"; backup before: git tag `backup-before-pvp-extras`
+## and `../Backups/ClassIndicator_<ts>`)
+- `healerMark` (on): green outlined cross at the icon's top-right for classes that CAN heal
+  (`HEALER_CLASSES`: Priest, Druid, Paladin, Shaman, Monk, Evoker). No spec info needed.
+- `targetBigger` (on) + `targetScale` 1.3: your target's icon is bigger (PLAYER_TARGET_CHANGED).
+- `bigClasses` (class -> true) + `bigScale` 1.3: a row of 9 class icons in the options to pick
+  the classes you fear most. Multipliers stack (big class + target).
+- Text: `textFormat` full | short (`SHORT_NAMES`: WAR, HUN, MAG...), `textOutline` none/outline/
+  thick, `textShadow`.
+- Window is now 1060x720 with 3 columns: Display + Icon | Class name | Border + PvP. The preview
+  has 5 plates: the 3rd is "the target", the 5th a Priest (healer cross).
+- Suggested and not done yet: spec icon (from BG info), distance limit, profiles, minimap button,
+  translations, setup guide, preview class choice.

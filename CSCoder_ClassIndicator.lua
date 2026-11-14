@@ -39,6 +39,14 @@ local DEFAULTS = {
 	textMode = "class",    -- class | white | enemy | custom
 	textColor = { 1, 1, 1, 1 },
 	textUpper = false,
+	textFormat = "full",   -- full (class name) | short (HUN, MAG...)
+	textOutline = "OUTLINE", -- "" | OUTLINE | THICKOUTLINE
+	textShadow = true,
+	healerMark = true,     -- green cross on classes that can heal
+	targetBigger = true,   -- your current target's icon is bigger
+	targetScale = 1.3,
+	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
+	bigScale = 1.3,
 }
 local SETTINGS_VERSION = 1
 
@@ -87,6 +95,13 @@ local OWN_NAMES = {
 	SHAMAN = "Shaman", PRIEST = "Priest", WARLOCK = "Warlock", PALADIN = "Paladin",
 	DEATHKNIGHT = "Death Knight", MONK = "Monk", DEMONHUNTER = "Demon Hunter", EVOKER = "Evoker",
 }
+local SHORT_NAMES = {
+	WARRIOR = "WAR", MAGE = "MAG", ROGUE = "ROG", DRUID = "DRU", HUNTER = "HUN", SHAMAN = "SHA",
+	PRIEST = "PRI", WARLOCK = "LCK", PALADIN = "PAL", DEATHKNIGHT = "DK", MONK = "MNK",
+	DEMONHUNTER = "DH", EVOKER = "EVO",
+}
+-- Classes that can heal (no spec info needed: the class alone is the warning).
+local HEALER_CLASSES = { PRIEST = true, DRUID = true, PALADIN = true, SHAMAN = true, MONK = true, EVOKER = true }
 -- Preview and test mode: the nine classes of the classic game, in this order.
 local SAMPLE_CLASSES = { "WARRIOR", "HUNTER", "MAGE", "ROGUE", "PRIEST", "WARLOCK", "PALADIN", "DRUID", "SHAMAN" }
 
@@ -143,6 +158,18 @@ function Indicator.New(parent)
 	f.textHolder:SetAllPoints()
 	f.textHolder:SetFrameLevel(f:GetFrameLevel() + 5)
 	f.text = f.textHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	-- Healer mark: a green cross with a dark outline at the icon's top-right corner.
+	local healer = CreateFrame("Frame", nil, f)
+	healer:SetFrameLevel(f:GetFrameLevel() + 6)
+	healer.parts = {}
+	for i, part in ipairs({ { 0, 0, 0, 1, "BACKGROUND" }, { 0, 0, 0, 1, "BACKGROUND" },
+		{ 0.15, 1, 0.3, 1, "ARTWORK" }, { 0.15, 1, 0.3, 1, "ARTWORK" } }) do
+		local t = healer:CreateTexture(nil, part[5])
+		t:SetColorTexture(part[1], part[2], part[3], part[4])
+		t:SetPoint("CENTER")
+		healer.parts[i] = t
+	end
+	f.healer = healer
 	f:Hide()
 	return f
 end
@@ -154,11 +181,15 @@ local function ModeColor(mode, custom, class)
 	return custom[1], custom[2], custom[3]
 end
 
--- Draw the indicator for a class (class = "MAGE", name = the text to show).
-function Indicator.Style(f, class, name)
+-- Draw the indicator for a class (class = "MAGE", name = the text to show; isTarget = it is
+-- your current target).
+function Indicator.Style(f, class, name, isTarget)
 	local coords = ClassCoords(class)
 	if not coords then f:Hide() return false end
-	local size = db.size
+	local mult = 1
+	if db.bigClasses[class] then mult = mult * db.bigScale end
+	if isTarget and db.targetBigger then mult = mult * db.targetScale end
+	local size = math.floor(db.size * mult + 0.5)
 	f:SetSize(size, size)
 	f:SetAlpha(db.alpha)
 	f.textHolder:SetFrameLevel(f:GetFrameLevel() + 5)
@@ -206,9 +237,34 @@ function Indicator.Style(f, class, name)
 		e:SetShown(square)
 	end
 
+	-- Healer mark: a cross about 40% of the icon, outlined.
+	local healer = f.healer
+	if db.healerMark and HEALER_CLASSES[class] then
+		local s = math.max(8, math.floor(size * 0.42))
+		local bar = math.max(2, math.floor(s / 3))
+		healer:SetSize(s + 2, s + 2)
+		healer:ClearAllPoints()
+		healer:SetPoint("CENTER", f, "TOPRIGHT", -s * 0.2, -s * 0.2)
+		local p = healer.parts
+		p[1]:SetSize(s + 2, bar + 2); p[2]:SetSize(bar + 2, s + 2)
+		p[3]:SetSize(s, bar); p[4]:SetSize(bar, s)
+		healer:Show()
+	else
+		healer:Hide()
+	end
+
 	local text = f.text
 	if db.showText and name then
-		text:SetFont(STANDARD_TEXT_FONT, db.textSize, "OUTLINE")
+		if db.textFormat == "short" then name = SHORT_NAMES[class] or name end
+		local outline = db.textOutline
+		if not pcall(text.SetFont, text, STANDARD_TEXT_FONT, db.textSize, outline) then
+			text:SetFontObject("GameFontNormal")
+		end
+		if db.textShadow then
+			text:SetShadowColor(0, 0, 0, 1); text:SetShadowOffset(1, -1)
+		else
+			text:SetShadowOffset(0, 0)
+		end
 		text:SetText(db.textUpper and string.upper(name) or name)
 		text:SetTextColor(ModeColor(db.textMode, db.textColor, class))
 		text:ClearAllPoints()
@@ -287,7 +343,7 @@ local function UpdateUnit(unit)
 		f:SetFrameStrata(plate:GetFrameStrata())
 		f:SetFrameLevel(plate:GetFrameLevel() + 50)
 	end)
-	if Indicator.Style(f, class, name) then
+	if Indicator.Style(f, class, name, UnitIsUnit(unit, "target")) then
 		Indicator.Place(f, PlateTarget(plate))
 		f:Show()
 	end
@@ -321,7 +377,7 @@ local OpenOptions
 do
 	local GOLD = { 1, 0.82, 0 }
 	local window, refreshers, list = nil, {}, nil
-	local COL1, COL2, CONTROL_W = 24, 360, 200
+	local COL1, COL2, COL3, CONTROL_W = 24, 370, 716, 200
 
 	local function Edges(frame, r, g, b, a)
 		for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
@@ -587,17 +643,17 @@ do
 		local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 		hint:SetPoint("BOTTOMRIGHT", -8, 6)
 		hint:SetText("Preview - /ci test shows it on real nameplates")
-		local samples = { "WARRIOR", "HUNTER", "MAGE", "ROGUE" }
-		local names = { "Grommash", "Thornshot", "Aetheris", "Shade" }
+		local samples = { "WARRIOR", "HUNTER", "MAGE", "ROGUE", "PRIEST" }
+		local names = { "Grommash", "Thornshot", "Aetheris (target)", "Shade", "Lightwell" }
 		local plates = {}
 		for i, class in ipairs(samples) do
 			local bar = CreateFrame("Frame", nil, box)
 			bar:SetSize(118, 12)
-			bar:SetPoint("BOTTOMLEFT", 30 + (i - 1) * 180, 40)
+			bar:SetPoint("BOTTOMLEFT", 50 + (i - 1) * 196, 40)
 			local fill = Fill(bar, 0.75, 0.08, 0.08, 1)
 			fill:ClearAllPoints()
 			fill:SetPoint("TOPLEFT"); fill:SetPoint("BOTTOMLEFT")
-			fill:SetWidth(118 * (1 - (i - 1) * 0.18))
+			fill:SetWidth(118 * (1 - (i - 1) * 0.15))
 			local back = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
 			back:SetAllPoints()
 			back:SetColorTexture(0.15, 0.02, 0.02, 1)
@@ -608,16 +664,49 @@ do
 			name:SetText(names[i])
 			local f = Indicator.New(bar)
 			f:SetFrameLevel(bar:GetFrameLevel() + 5)
-			plates[i] = { bar = bar, indicator = f, class = class }
+			plates[i] = { bar = bar, indicator = f, class = class, target = i == 3 }
 		end
 		return function()
 			for _, p in ipairs(plates) do
-				if Indicator.Style(p.indicator, p.class, ClassName(p.class)) then
+				if Indicator.Style(p.indicator, p.class, ClassName(p.class), p.target) then
 					Indicator.Place(p.indicator, p.bar)
 					p.indicator:SetShown(db.enabled)
 				end
 			end
 		end
+	end
+
+	-- A row of class icons: click to mark a class as "shown bigger".
+	local function AddClassPicker(parent, text, x, y, tip)
+		Label(parent, text, x, y)
+		local buttons = {}
+		for i, class in ipairs(SAMPLE_CLASSES) do
+			local b = CreateFrame("Button", nil, parent)
+			b:SetSize(28, 28)
+			b:SetPoint("TOPLEFT", x + (i - 1) * 32, y - 16)
+			local icon = b:CreateTexture(nil, "ARTWORK")
+			icon:SetPoint("TOPLEFT", 2, -2); icon:SetPoint("BOTTOMRIGHT", -2, 2)
+			local c = ClassCoords(class)
+			local cx, cy = (c[2] - c[1]) * 0.07, (c[4] - c[3]) * 0.07
+			icon:SetTexture(CLASS_TEXTURE)
+			icon:SetTexCoord(c[1] + cx, c[2] - cx, c[3] + cy, c[4] - cy)
+			local edge = CreateFrame("Frame", nil, b)
+			edge:SetAllPoints()
+			Edges(edge, GOLD[1], GOLD[2], GOLD[3], 1)
+			b:SetScript("OnClick", function()
+				db.bigClasses[class] = not db.bigClasses[class] or nil
+				Changed()
+			end)
+			Tooltip(b, ClassName(class) .. "\n" .. (tip or ""))
+			refreshers[#refreshers + 1] = function()
+				local on = db.bigClasses[class] and true or false
+				icon:SetDesaturated(not on)
+				icon:SetAlpha(on and 1 or 0.45)
+				edge:SetShown(on)
+			end
+			buttons[i] = b
+		end
+		return buttons
 	end
 
 	local function Refresh()
@@ -627,7 +716,7 @@ do
 
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(760, 720)
+		window:SetSize(1060, 720)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -688,29 +777,48 @@ do
 			"Distance from the health bar. Raise it to clear the name text.").slider, On)
 		Gate(AddSlider(page, "Opacity", "alpha", 0.2, 1, 0.05, COL1, y - 250).slider, On)
 
-		-- Column 2: Border + Text.
+		-- Column 2: Class name.
 		y = 0
-		Heading(page, "Border", COL2, y)
-		Gate(AddCheck(page, "Show a border", "border", COL2, y - 24), On)
-		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "enemy", "Enemy red" },
-			{ "custom", "Custom color" } }, COL2, y - 50).button, BorderOn)
-		Gate(AddSwatch(page, "Custom color", "borderColor", COL2 + 214, y - 68),
-			function() return BorderOn() and db.borderMode == "custom" end)
-		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL2, y - 98).slider, BorderOn)
-
-		y = y - 150
 		Heading(page, "Class name", COL2, y)
 		Gate(AddCheck(page, "Show the class name", "showText", COL2, y - 24), On)
 		Gate(AddCheck(page, "Capital letters", "textUpper", COL2 + 180, y - 24), TextOn)
+		Gate(AddDropdown(page, "Text", "textFormat", { { "full", "Full name (Hunter)" }, { "short", "Short (HUN)" } },
+			COL2, y - 50, "Short names take less room when many players are close together.").button, TextOn)
 		Gate(AddDropdown(page, "Text position", "textPos", { { "below", "Below the icon" }, { "above", "Above the icon" },
-			{ "left", "Left of the icon" }, { "right", "Right of the icon" } }, COL2, y - 50).button, TextOn)
-		Gate(AddSlider(page, "Text X", "textX", -100, 100, 1, COL2, y - 98).slider, TextOn)
-		Gate(AddSlider(page, "Text Y", "textY", -100, 100, 1, COL2, y - 142).slider, TextOn)
-		Gate(AddSlider(page, "Text size", "textSize", 6, 24, 1, COL2, y - 186).slider, TextOn)
+			{ "left", "Left of the icon" }, { "right", "Right of the icon" } }, COL2, y - 98).button, TextOn)
+		Gate(AddSlider(page, "Text X", "textX", -100, 100, 1, COL2, y - 146).slider, TextOn)
+		Gate(AddSlider(page, "Text Y", "textY", -100, 100, 1, COL2, y - 190).slider, TextOn)
+		Gate(AddSlider(page, "Text size", "textSize", 6, 24, 1, COL2, y - 234).slider, TextOn)
 		Gate(AddDropdown(page, "Text color", "textMode", { { "class", "Class color" }, { "white", "White" },
-			{ "enemy", "Enemy red" }, { "custom", "Custom color" } }, COL2, y - 230).button, TextOn)
-		Gate(AddSwatch(page, "Custom color", "textColor", COL2 + 214, y - 248),
+			{ "enemy", "Enemy red" }, { "custom", "Custom color" } }, COL2, y - 278).button, TextOn)
+		Gate(AddSwatch(page, "Custom color", "textColor", COL2 + 214, y - 296),
 			function() return TextOn() and db.textMode == "custom" end)
+		Gate(AddDropdown(page, "Outline", "textOutline", { { "", "None" }, { "OUTLINE", "Outline" },
+			{ "THICKOUTLINE", "Thick outline" } }, COL2, y - 326).button, TextOn)
+		Gate(AddCheck(page, "Shadow", "textShadow", COL2 + 214, y - 344), TextOn)
+
+		-- Column 3: Border + PvP.
+		y = 0
+		Heading(page, "Border", COL3, y)
+		Gate(AddCheck(page, "Show a border", "border", COL3, y - 24), On)
+		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "enemy", "Enemy red" },
+			{ "custom", "Custom color" } }, COL3, y - 50).button, BorderOn)
+		Gate(AddSwatch(page, "Custom color", "borderColor", COL3 + 214, y - 68),
+			function() return BorderOn() and db.borderMode == "custom" end)
+		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL3, y - 98).slider, BorderOn)
+
+		y = y - 160
+		Heading(page, "PvP", COL3, y)
+		Gate(AddCheck(page, "Mark healer classes", "healerMark", COL3, y - 24,
+			"A green cross on classes that can heal (Priest, Druid, Paladin, Shaman...). Usually the first one to kill."), On)
+		Gate(AddCheck(page, "Bigger icon on your target", "targetBigger", COL3, y - 50), On)
+		Gate(AddSlider(page, "Target size", "targetScale", 1, 2, 0.05, COL3, y - 74).slider,
+			function() return db.enabled and db.targetBigger end)
+		for _, b in ipairs(AddClassPicker(page, "Classes shown bigger (click to pick)", COL3, y - 124,
+			"Click to show this class bigger.")) do
+			Gate(b, On)
+		end
+		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
 
 		local reset = Button(page, "Reset all", 110)
 		reset:SetPoint("BOTTOMLEFT", COL1, 16)

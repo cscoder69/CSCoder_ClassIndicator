@@ -166,6 +166,27 @@ for _, shape in ipairs({ "round", "rounded", "square" }) do
 		end
 	end
 end
+-- PvP extras (the click loop above turned test mode on: turn it off).
+try("slash test off", env.SlashCmdList.CSCODERCLASSINDICATOR, "test")
+db.enabled = true
+local ind = plates.nameplate1.cciIndicator
+db.size, db.bigScale, db.targetScale, db.targetBigger, db.bigClasses = 20, 1.5, 2, true, {}
+db.textFormat, db.textOutline, db.textShadow, db.showText, db.healerMark = "short", "", false, true, true
+Fire("PLAYER_ENTERING_WORLD")
+print("short text -> MAG", ind.text._text == "MAG")
+print("mage: no healer cross", not ind.healer._shown)
+units.nameplate1.class, units.nameplate1.name = "PRIEST", "Priest"
+Fire("PLAYER_ENTERING_WORLD")
+print("priest: healer cross", ind.healer._shown)
+local sizes = {}
+local setSize = ind.SetSize
+ind.SetSize = function(self, w) sizes[#sizes + 1] = w end
+db.bigClasses.PRIEST = true
+Fire("PLAYER_ENTERING_WORLD")
+env.UnitIsUnit = function(a, b) return a == b or (a == "nameplate1" and b == "target") end
+Fire("PLAYER_TARGET_CHANGED")
+print("sizes: big class 30, big + target 60", sizes[1], sizes[#sizes])
+ind.SetSize = setSize
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))
 print("controls clicked", clicked, "sliders", slid)
