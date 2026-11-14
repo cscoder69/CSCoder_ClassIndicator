@@ -56,7 +56,7 @@ local DEFAULTS = {
 	targetGlow = true,     -- pulsing glow around your target's icon
 	glowColor = { 1, 0.82, 0, 1 },
 }
-local SETTINGS_VERSION = 1
+local SETTINGS_VERSION = 2
 
 local db
 local function CopyValue(value)
@@ -65,18 +65,72 @@ local function CopyValue(value)
 	for k, v in pairs(value) do copy[k] = v end
 	return copy
 end
-local function LoadSettings()
-	CSCoderClassIndicatorDB = type(CSCoderClassIndicatorDB) == "table" and CSCoderClassIndicatorDB or {}
-	db = CSCoderClassIndicatorDB
-	if db.borderMode == "none" then db.border, db.borderMode = false, "class" end -- old "No border" choice
-	db.targetArrows, db.arrowColor, db.clickTarget = nil, nil, nil -- removed options
+-- Saved layout: CSCoderClassIndicatorDB = { version, profiles = { name = settings },
+-- chars = { "Name - Realm" = profile name } }. db = the active profile.
+local root
+local function FillDefaults(profile)
+	if profile.borderMode == "none" then profile.border, profile.borderMode = false, "class" end -- old "No border"
+	profile.targetArrows, profile.arrowColor, profile.clickTarget, profile.version = nil, nil, nil, nil -- removed
 	for key, value in pairs(DEFAULTS) do
-		if type(db[key]) ~= type(value) then db[key] = CopyValue(value) end
+		if type(profile[key]) ~= type(value) then profile[key] = CopyValue(value) end
 	end
-	db.version = SETTINGS_VERSION
+	return profile
+end
+local function CharKey()
+	return (UnitName("player") or "?") .. " - " .. (GetRealmName() or "?")
+end
+local function LoadSettings()
+	root = type(CSCoderClassIndicatorDB) == "table" and CSCoderClassIndicatorDB or {}
+	CSCoderClassIndicatorDB = root
+	if type(root.profiles) ~= "table" then
+		-- Version 1 kept one flat table: it becomes the "Default" profile.
+		local old = {}
+		for key, value in pairs(root) do old[key] = value end
+		for key in pairs(old) do root[key] = nil end
+		root.profiles = { Default = old }
+	end
+	root.chars = type(root.chars) == "table" and root.chars or {}
+	root.profiles.Default = type(root.profiles.Default) == "table" and root.profiles.Default or {}
+	root.version = SETTINGS_VERSION
+	local name = root.chars[CharKey()]
+	if type(root.profiles[name]) ~= "table" then name = "Default" end
+	root.chars[CharKey()] = name
+	db = FillDefaults(root.profiles[name])
 end
 local function ResetSettings()
 	for key, value in pairs(DEFAULTS) do db[key] = CopyValue(value) end
+end
+
+-- Profiles (one per character by default "Default"; shared between characters on purpose).
+local Profiles = {}
+function Profiles.Current() return root.chars[CharKey()] end
+function Profiles.Names()
+	local names = {}
+	for name in pairs(root.profiles) do names[#names + 1] = name end
+	table.sort(names, function(a, b)
+		if a == "Default" then return true elseif b == "Default" then return false end
+		return a:lower() < b:lower()
+	end)
+	return names
+end
+function Profiles.Use(name)
+	if type(root.profiles[name]) ~= "table" then root.profiles[name] = {} end
+	root.chars[CharKey()] = name
+	db = FillDefaults(root.profiles[name])
+end
+function Profiles.CopyFrom(name)
+	local source = root.profiles[name]
+	if type(source) ~= "table" or source == db then return end
+	FillDefaults(source)
+	for key in pairs(DEFAULTS) do db[key] = CopyValue(source[key]) end
+end
+function Profiles.Delete(name)
+	if name == "Default" or name == Profiles.Current() or not root.profiles[name] then return false end
+	root.profiles[name] = nil
+	for char, profile in pairs(root.chars) do
+		if profile == name then root.chars[char] = "Default" end
+	end
+	return true
 end
 
 ---------------------------------------------------------------------------------------------
@@ -645,8 +699,12 @@ do
 		local arrow = b:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 		arrow:SetPoint("RIGHT", -8, 0)
 		arrow:SetText("v")
+		-- key can be { get = fn, set = fn } and options a function (lists that change).
+		local function Get() if type(key) == "table" then return key.get() end return db[key] end
+		local function Set(value) if type(key) == "table" then key.set(value) else db[key] = value end end
+		local function Options() if type(options) == "function" then return options() end return options end
 		local function TextOf(value)
-			for _, option in ipairs(options) do if option[1] == value then return option[2] end end
+			for _, option in ipairs(Options()) do if option[1] == value then return option[2] end end
 			return tostring(value)
 		end
 		b:SetScript("OnClick", function()
@@ -659,8 +717,9 @@ do
 				list.rows = {}
 			end
 			list.owner = b
+			local options = Options()
 			list:ClearAllPoints()
-			list:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2)
+			if holder.openUp then list:SetPoint("BOTTOMLEFT", b, "TOPLEFT", 0, 2) else list:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2) end
 			list:SetSize(CONTROL_W, #options * 20 + 6)
 			for i, option in ipairs(options) do
 				local row = list.rows[i]
@@ -677,8 +736,8 @@ do
 				end
 				row.text:SetText(option[2])
 				row:SetScript("OnClick", function()
-					db[key] = option[1]
 					CloseList()
+					Set(option[1])
 					Changed()
 				end)
 				row:Show()
@@ -687,7 +746,7 @@ do
 			list:Show()
 		end)
 		Tooltip(b, tip)
-		refreshers[#refreshers + 1] = function() b.label:SetText(TextOf(db[key])) end
+		refreshers[#refreshers + 1] = function() b.label:SetText(TextOf(Get())) end
 		holder.button = b
 		return holder
 	end
@@ -704,17 +763,8 @@ do
 			db[key] = { r, g, b, 1 }
 			Changed()
 		end
-		if ColorPickerFrame.SetupColorPickerAndShow then
-			ColorPickerFrame:SetupColorPickerAndShow({ r = r, g = g, b = b, hasOpacity = false,
-				swatchFunc = Apply, cancelFunc = Cancel })
-		else
-			ColorPickerFrame.func, ColorPickerFrame.cancelFunc = Apply, Cancel
-			ColorPickerFrame.hasOpacity = false
-			ColorPickerFrame.previousValues = { r, g, b }
-			ColorPickerFrame:SetColorRGB(r, g, b)
-			ColorPickerFrame:Hide()
-			ColorPickerFrame:Show()
-		end
+		ColorPickerFrame:SetupColorPickerAndShow({ r = r, g = g, b = b, hasOpacity = false,
+			swatchFunc = Apply, cancelFunc = Cancel })
 	end
 	local function AddSwatch(parent, text, key, x, y)
 		local b = CreateFrame("Button", nil, parent)
@@ -944,11 +994,64 @@ do
 		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 226),
 			function() return db.enabled and db.targetGlow end)
 
-		local reset = Button(page, "Reset all", 110)
+		local reset = Button(page, "Reset profile", 110)
 		reset:SetPoint("BOTTOMLEFT", COL1, 16)
 		reset:SetScript("OnClick", function() ResetSettings(); Refresh(); Changed() end)
+		Tooltip(reset, "Puts every option of the current profile back to the defaults.")
+
+		-- Profiles bar: current profile, new, copy from, delete (lists open upwards).
+		local barY = -(760 - 224) + 58 -- window height minus the preview area
+		local function Others(withDefault)
+			local list = {}
+			for _, name in ipairs(Profiles.Names()) do
+				if name ~= Profiles.Current() and (withDefault or name ~= "Default") then list[#list + 1] = { name, name } end
+			end
+			if #list == 0 then list[1] = { "", "(no other profile)" } end
+			return list
+		end
+		local current = AddDropdown(page, "Profile (this character)", { get = Profiles.Current,
+			set = function(name) Profiles.Use(name) end },
+			function() local list = {} for _, n in ipairs(Profiles.Names()) do list[#list + 1] = { n, n } end return list end,
+			160, barY, "Each character uses one profile. Characters can share a profile.")
+		current.openUp = true
+		local new = Button(page, "New profile", 100)
+		new:SetPoint("TOPLEFT", 372, barY - 16)
+		new:SetScript("OnClick", function() StaticPopup_Show("CSCODER_CI_NEW_PROFILE") end)
+		Tooltip(new, "A new profile with the default options, used by this character.")
+		local copy = AddDropdown(page, "Copy from", { get = function() return "" end,
+			set = function(name) if name ~= "" then Profiles.CopyFrom(name) end end },
+			function() return Others(true) end, 492, barY, "Copies every option of that profile into the current one.")
+		copy.openUp = true
+		local delete = AddDropdown(page, "Delete a profile", { get = function() return "" end,
+			set = function(name)
+				if name ~= "" then StaticPopup_Show("CSCODER_CI_DELETE_PROFILE", name, nil, name) end
+			end }, function() return Others(false) end, 712, barY,
+			"Deletes a profile (not \"Default\" nor the one in use). Characters using it go back to \"Default\".")
+		delete.openUp = true
+
+		local function Trim(text) return (string.match(text or "", "^%s*(.-)%s*$")) end
+		local function AcceptNew(popup)
+			local box = popup.editBox or popup.EditBox or (popup.GetEditBox and popup:GetEditBox())
+			local name = box and Trim(box:GetText())
+			if name and name ~= "" then
+				Profiles.Use(name)
+				Changed()
+			end
+		end
+		StaticPopupDialogs.CSCODER_CI_NEW_PROFILE = {
+			text = "Name of the new profile:", button1 = OKAY, button2 = CANCEL, hasEditBox = true,
+			timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+			OnAccept = AcceptNew,
+			EditBoxOnEnterPressed = function(self) AcceptNew(self:GetParent()); self:GetParent():Hide() end,
+			EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+		}
+		StaticPopupDialogs.CSCODER_CI_DELETE_PROFILE = {
+			text = "Delete the profile \"%s\"?", button1 = YES, button2 = NO,
+			timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+			OnAccept = function(_, name) Profiles.Delete(name); Changed() end,
+		}
 		local hint = page:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-		hint:SetPoint("BOTTOMRIGHT", -18, 20)
+		hint:SetPoint("TOPRIGHT", window, "TOPRIGHT", -44, -20)
 		hint:SetText("Mouse wheel on a slider steps it. Type a value and press Enter.")
 
 		-- Every change refreshes the controls too (gates follow the switches).

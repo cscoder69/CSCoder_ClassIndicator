@@ -65,6 +65,11 @@ env.Settings = {
 	RegisterCanvasLayoutSubcategory = function() return {} end,
 }
 env.HideUIPanel = function() end
+env.StaticPopupDialogs = {}
+env.StaticPopup_Show = function(name, a, b, data) env._popup = { name = name, data = data } end
+env.OKAY, env.CANCEL, env.YES, env.NO = "OK", "Cancel", "Yes", "No"
+env.UnitName = function() return "Tester" end
+env.GetRealmName = function() return "Realm" end
 local inCombat = false
 env.InCombatLockdown = function() return inCombat end
 env.issecretvalue = function() return false end
@@ -132,7 +137,9 @@ print("friendly player: none by default", not Shown("nameplate2"))
 print("NPC: none", not Shown("nameplate3"))
 print("text is the class name", plates.nameplate1.cciIndicator and plates.nameplate1.cciIndicator.text._text)
 
-local db = env.CSCoderClassIndicatorDB
+-- db = the active profile (looked up on every access: profiles can switch).
+local function Active() local r = env.CSCoderClassIndicatorDB; return r.profiles[r.chars["Tester - Realm"]] end
+local db = setmetatable({}, { __index = function(_, k) return Active()[k] end, __newindex = function(_, k, v) Active()[k] = v end })
 db.friends = true
 Fire("PLAYER_ENTERING_WORLD")
 print("friends on -> friendly player gets it", Shown("nameplate2"))
@@ -217,3 +224,24 @@ for k in pairs(nilGlobals) do names[#names + 1] = k end
 table.sort(names)
 print("unexpected nil globals:", #names == 0 and "none" or table.concat(names, ", "))
 print("errors:", errors)
+
+-- Profiles.
+local root = env.CSCoderClassIndicatorDB
+print("profiles layout", type(root.profiles) == "table" and root.chars["Tester - Realm"] == "Default")
+local newDialog = env.StaticPopupDialogs.CSCODER_CI_NEW_PROFILE
+local fakeBox = { GetText = function() return "  BG  " end }
+try("new profile", newDialog.OnAccept, { editBox = fakeBox })
+print("new profile 'BG' in use", root.chars["Tester - Realm"] == "BG" and type(root.profiles.BG) == "table")
+root.profiles.Default.size = 50
+local delDialog = env.StaticPopupDialogs.CSCODER_CI_DELETE_PROFILE
+try("delete current (refused)", delDialog.OnAccept, nil, "BG")
+print("current profile can't be deleted", root.profiles.BG ~= nil)
+-- Old flat save migrates into Default.
+env.CSCoderClassIndicatorDB = { enabled = true, size = 40, shape = "square", version = 1 }
+frames = {}
+chunk = assert(loadfile(dir .. "/CSCoder_ClassIndicator.lua")); setfenv(chunk, env); try("reload", chunk, "CSCoder_ClassIndicator")
+for _, f in ipairs(frames) do if f._scripts.OnEvent then events = f end end
+Fire("ADDON_LOADED", "CSCoder_ClassIndicator")
+local r2 = env.CSCoderClassIndicatorDB
+print("old save -> Default keeps size 40 / square", r2.profiles and r2.profiles.Default.size == 40 and r2.profiles.Default.shape == "square")
+print("errors after profiles:", errors)
