@@ -375,8 +375,9 @@ function Click.Update(plate, unit, show, size)
 		b:HookScript("OnClick", function(self, mouse, down)
 			if not Click.trace then return end
 			local unit = self:GetAttribute("unit")
-			print(string.format("|cffffd200CI click|r %s down=%s unit=%s type=%s exists=%s", tostring(mouse), tostring(down),
-				tostring(unit), tostring(self:GetAttribute("type")), tostring(unit and UnitExists(unit))))
+			print(string.format("|cffffd200CI click|r %s down=%s unit=%s type=%s exists=%s | target right after: %s",
+				tostring(mouse), tostring(down), tostring(unit), tostring(self:GetAttribute("type")),
+				tostring(unit and UnitExists(unit)), tostring(UnitName("target"))))
 			C_Timer.After(0.2, function()
 				print(string.format("|cffffd200CI click|r target now: %s (same unit: %s)", tostring(UnitName("target")),
 					tostring(unit and UnitIsUnit("target", unit))))
@@ -1036,6 +1037,15 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 	msg = string.lower(msg or "")
 	if msg == "test" then
 		SetTestMode(not testMode)
+	elseif msg == "targettest" then
+		-- Can this addon target a nameplate unit at all? (plain function call, out of combat)
+		local plate = C_NamePlate.GetNamePlates()[1]
+		local unit = plate and (plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit))
+		print("|cffffd200CI|r targettest unit=" .. tostring(unit))
+		if unit then
+			local ok, err = pcall(TargetUnit, unit)
+			print("  TargetUnit ok=" .. tostring(ok) .. " err=" .. tostring(err) .. " target now: " .. tostring(UnitName("target")))
+		end
 	elseif msg == "debug" then
 		-- What is under the mouse, and the click buttons' state (hover an icon, then type it).
 		local function Describe(frame)
