@@ -880,7 +880,7 @@ do
 	end
 
 	function OpenOptions(toggle)
-		if not window then Build() end
+		if not window then Build(); window:Hide() end -- a new frame starts shown: the first toggle closed it
 		if toggle and window:IsShown() then window:Hide() return end
 		Refresh()
 		window:Show()
@@ -971,6 +971,34 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 	msg = string.lower(msg or "")
 	if msg == "test" then
 		SetTestMode(not testMode)
+	elseif msg == "debug" then
+		-- What is under the mouse, and the click buttons' state (hover an icon, then type it).
+		local function Describe(frame)
+			if not frame then return "nil" end
+			local ok, text = pcall(function()
+				return string.format("%s [%s] mouse=%s level=%s strata=%s", tostring(frame:GetName() or "?"),
+					frame:GetObjectType(), tostring(frame:IsMouseEnabled()), tostring(frame:GetFrameLevel()),
+					tostring(frame:GetFrameStrata()))
+			end)
+			return ok and text or "(can't read)"
+		end
+		local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+		print("|cffffd200CI debug|r under the mouse:")
+		for _, frame in ipairs(foci or {}) do print("  " .. Describe(frame)) end
+		local made, shown = 0, 0
+		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+			local b = plate.cciClick
+			if b then
+				made = made + 1
+				if b:IsVisible() then shown = shown + 1 end
+				if made <= 3 then
+					print(string.format("  click %s unit=%s visible=%s size=%dx%d %s", tostring(plate.namePlateUnitToken),
+						tostring(b:GetAttribute("unit")), tostring(b:IsVisible()), b:GetWidth(), b:GetHeight(), Describe(b)))
+				end
+			end
+		end
+		print(string.format("  plates %d, click buttons %d (visible %d), clickTarget=%s, combat=%s",
+			#(C_NamePlate.GetNamePlates() or {}), made, shown, tostring(db.clickTarget), tostring(InCombatLockdown())))
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
