@@ -59,12 +59,11 @@ the layout is approved). Junction already in AddOns. Local git only (ask before 
 - Target highlight = pulsing GLOW of the icon shape (`media/glow_*.tga`, 1.6x the icon, ADD blend); the user rejected the ">> <<" arrows (they ran over the name). Healer cross has a 2 px outline (`healerOutline`).
 - Click to target: REMOVED. WoW Forever forbids targeting for addons ("only for the Blizzard UI" popup on TargetUnit) and the secure button never targeted (left clicks didn't even reach it). The way to click the icon is the nameplate addon's own click area: Plater > Advanced > Click Space height (enemy and friendly), "always show" to see it. Preview background is dark teal (user's "fundo preto").
 
-## Clickable icon + profiles (2026-11-14)
-- `clickArea` (OFF since the user saw Plater's target lines stretched to the taller box): `ClickArea` enlarges the GAME's nameplate click box (C_NamePlate.Set*Size,
-  enemy; friendly too when `friends`/test mode) to cover the icon. Whoever else sets the size
-  (game, Plater) is hooked (hooksecurefunc at file load, before Plater caches it) and becomes the
-  base; ours only adds on top. Out of combat only (pending -> PLAYER_REGEN_ENABLED). The target's
-  bigger size isn't counted. NOT tested in game yet; prints once if the game refuses.
+## Clicking the icon: DROPPED for good (2026-11-14, user: "somente visualização")
+The client forbids addon targeting; enlarging the nameplate click box stretched Plater's target
+lines. The addon never touches click areas or targeting. Do not bring it back.
+
+## Profiles (2026-11-14)
 - Profiles (SETTINGS_VERSION 2): `CSCoderClassIndicatorDB = { version, profiles, chars }`, v1 flat
   save -> "Default". `Profiles.Use/CopyFrom/Delete/Names/Current`. Bar at the bottom of the window:
   Profile (this character) | New profile (StaticPopup with edit box) | Copy from | Delete (confirm).

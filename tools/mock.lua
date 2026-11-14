@@ -210,14 +210,6 @@ if ind.glowPulse._scripts.OnUpdate then try("glow pulse", ind.glowPulse._scripts
 ind.SetSize = setSize
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))
-db.clickArea, db.anchor, db.offsetY, db.size = true, "top", 14, 28
-env.CSCoderOptionsParent = env.CSCoderOptionsParent
-Fire("PLAYER_ENTERING_WORLD")
-print("click area enlarged (enemy height > 45)", env._enemySize and env._enemySize[2] > 45, env._enemySize and env._enemySize[2])
-env.C_NamePlate.SetNamePlateEnemySize(130, 50) -- another addon sets its own size
-print("other addon size kept as base, ours on top", env._enemySize[1] >= 130 and env._enemySize[2] > 50)
-db.clickArea = false; Fire("PLAYER_ENTERING_WORLD")
-print("off -> back to the base", env._enemySize[2] == 50)
 print("controls clicked", clicked, "sliders", slid)
 local names = {}
 for k in pairs(nilGlobals) do names[#names + 1] = k end
