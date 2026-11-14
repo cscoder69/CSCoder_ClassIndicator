@@ -29,3 +29,27 @@ write("circle_hole", function(x, y) return 1 - circle(x, y) end)
 write("rsquare", rsquare)
 write("rsquare_hole", function(x, y) return 1 - rsquare(x, y) end)
 print("ok")
+
+-- Soft glows for the target highlight: the shape takes the middle 1/GLOW_SCALE of the texture;
+-- the glow peaks at the shape's edge and fades outwards (and quickly inwards, so a see-through
+-- icon isn't tinted).
+local GLOW_SCALE = 1.6
+local h = N / 2 / GLOW_SCALE
+local width = N * 0.11
+local function glow(sdf)
+	return function(x, y)
+		local d = sdf(x - c, y - c)
+		if d < 0 then return math.max(0, 1 + d / 3) end
+		return math.exp(-(d / width) ^ 2)
+	end
+end
+local function box(px, py, radius)
+	local dx = math.max(math.abs(px) - (h - radius), 0)
+	local dy = math.max(math.abs(py) - (h - radius), 0)
+	local inside = math.min(math.max(math.abs(px) - (h - radius), math.abs(py) - (h - radius)), 0)
+	return math.sqrt(dx * dx + dy * dy) + inside - radius
+end
+write("glow_round", glow(function(px, py) return math.sqrt(px * px + py * py) - h end))
+write("glow_rounded", glow(function(px, py) return box(px, py, h * 0.447) end))
+write("glow_square", glow(function(px, py) return box(px, py, 0) end))
+print("glows ok")

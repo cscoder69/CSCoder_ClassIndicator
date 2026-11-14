@@ -188,8 +188,8 @@ Fire("PLAYER_ENTERING_WORLD")
 env.UnitIsUnit = function(a, b) return a == b or (a == "nameplate1" and b == "target") end
 Fire("PLAYER_TARGET_CHANGED")
 print("sizes: big class 30, big + target 60", sizes[1], sizes[#sizes])
-print("target arrows shown", ind.arrows[1]._shown and ind.arrows[2]._shown)
-if ind.arrowPulse._scripts.OnUpdate then try("arrow pulse", ind.arrowPulse._scripts.OnUpdate, ind.arrowPulse, 0.1) end
+print("target glow shown", ind.glow._shown)
+if ind.glowPulse._scripts.OnUpdate then try("glow pulse", ind.glowPulse._scripts.OnUpdate, ind.glowPulse, 0.1) end
 ind.SetSize = setSize
 print("click button made, unit set", plates.nameplate1.cciClick ~= nil)
 inCombat = true

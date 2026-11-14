@@ -49,8 +49,8 @@ local DEFAULTS = {
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
 	clickTarget = true,    -- click the icon to target that player
-	targetArrows = true,   -- ">>  <<" around your target's icon
-	arrowColor = { 1, 0.82, 0, 1 },
+	targetGlow = true,     -- pulsing glow around your target's icon
+	glowColor = { 1, 0.82, 0, 1 },
 }
 local SETTINGS_VERSION = 1
 
@@ -65,6 +65,7 @@ local function LoadSettings()
 	CSCoderClassIndicatorDB = type(CSCoderClassIndicatorDB) == "table" and CSCoderClassIndicatorDB or {}
 	db = CSCoderClassIndicatorDB
 	if db.borderMode == "none" then db.border, db.borderMode = false, "class" end -- old "No border" choice
+	db.targetArrows, db.arrowColor = nil, nil -- the target arrows became a glow
 	for key, value in pairs(DEFAULTS) do
 		if type(db[key]) ~= type(value) then db[key] = CopyValue(value) end
 	end
@@ -174,26 +175,16 @@ function Indicator.New(parent)
 		healer.parts[i] = t
 	end
 	f.healer = healer
-	-- Target arrows ">>" and "<<", pulsing.
-	f.arrows = {}
-	for i, glyph in ipairs({ ">>", "<<" }) do
-		local a = f.textHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		a:SetText(glyph)
-		a:Hide()
-		f.arrows[i] = a
-	end
-	f.arrowPulse = CreateFrame("Frame", nil, f)
-	f.arrowPulse:Hide()
-	f.arrowPulse:SetScript("OnUpdate", function(self, elapsed)
+	-- Target glow: a soft halo of the icon's shape behind it, pulsing (only around the icon).
+	f.glow = f:CreateTexture(nil, "BACKGROUND", nil, -7)
+	f.glow:SetPoint("CENTER")
+	f.glow:SetBlendMode("ADD")
+	f.glow:Hide()
+	f.glowPulse = CreateFrame("Frame", nil, f)
+	f.glowPulse:Hide()
+	f.glowPulse:SetScript("OnUpdate", function(self, elapsed)
 		self.t = (self.t or 0) + elapsed
-		local alpha = 0.55 + 0.45 * math.abs(math.sin(self.t * 4))
-		local shift = 2 * math.sin(self.t * 8)
-		for i, a in ipairs(f.arrows) do
-			a:SetAlpha(alpha)
-			local side = i == 1 and -1 or 1
-			a:ClearAllPoints()
-			a:SetPoint(i == 1 and "RIGHT" or "LEFT", self.anchors[i], i == 1 and "LEFT" or "RIGHT", side * (3 + shift), 0)
-		end
+		f.glow:SetAlpha(0.55 + 0.45 * math.abs(math.sin(self.t * 3)))
 	end)
 	f:Hide()
 	return f
@@ -267,11 +258,11 @@ function Indicator.Style(f, class, name, isTarget)
 	if db.healerMark and HEALER_CLASSES[class] then
 		local s = math.max(8, math.floor(size * 0.42))
 		local bar = math.max(2, math.floor(s / 3))
-		healer:SetSize(s + 2, s + 2)
+		healer:SetSize(s + 4, s + 4)
 		healer:ClearAllPoints()
 		healer:SetPoint("CENTER", f, "TOPRIGHT", -s * 0.2, -s * 0.2)
 		local p = healer.parts
-		p[1]:SetSize(s + 2, bar + 2); p[2]:SetSize(bar + 2, s + 2)
+		p[1]:SetSize(s + 4, bar + 4); p[2]:SetSize(bar + 4, s + 4)
 		p[3]:SetSize(s, bar); p[4]:SetSize(bar, s)
 		p[1]:SetShown(db.healerOutline); p[2]:SetShown(db.healerOutline)
 		healer:Show()
@@ -304,25 +295,18 @@ function Indicator.Style(f, class, name, isTarget)
 		text:Hide()
 	end
 
-	-- Target arrows: outside the icon, and outside the text when it sits on that side.
-	local pulse = f.arrowPulse
-	if isTarget and db.targetArrows then
-		local c = db.arrowColor
-		local arrowSize = math.max(12, math.floor(size * 0.6))
-		local textShown = text:IsShown()
-		pulse.anchors = {
-			(textShown and db.textPos == "left") and text or f,
-			(textShown and db.textPos == "right") and text or f,
-		}
-		for _, a in ipairs(f.arrows) do
-			if not pcall(a.SetFont, a, STANDARD_TEXT_FONT, arrowSize, "THICKOUTLINE") then a:SetFontObject("GameFontNormalLarge") end
-			a:SetTextColor(c[1], c[2], c[3], 1)
-			a:Show()
-		end
-		pulse:Show()
+	-- Target glow: same shape as the icon, the texture is 1.6x the icon (make_shapes.lua).
+	if isTarget and db.targetGlow then
+		local c = db.glowColor
+		local glowShape = shape == "square" and "square" or (f.canMask and shape or "round")
+		f.glow:SetTexture(MEDIA .. "glow_" .. glowShape)
+		f.glow:SetSize(size * 1.6, size * 1.6)
+		f.glow:SetVertexColor(c[1], c[2], c[3], 1)
+		f.glow:Show()
+		f.glowPulse:Show()
 	else
-		pulse:Hide()
-		for _, a in ipairs(f.arrows) do a:Hide() end
+		f.glow:Hide()
+		f.glowPulse:Hide()
 	end
 	return true
 end
@@ -913,10 +897,10 @@ do
 		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
 		Gate(AddCheck(page, "Click the icon to target", "clickTarget", COL3, y - 226,
 			"Left or right click on the icon targets that player. During combat the click spot can't move (game rule), so it may sit a few pixels off until the fight ends."), On)
-		Gate(AddCheck(page, ">> << around your target", "targetArrows", COL3, y - 252,
-			"Pulsing arrows on both sides of your current target's icon."), On)
-		Gate(AddSwatch(page, "Arrow color", "arrowColor", COL3 + 214, y - 252),
-			function() return db.enabled and db.targetArrows end)
+		Gate(AddCheck(page, "Glow on your target", "targetGlow", COL3, y - 252,
+			"A pulsing glow around your current target's icon (only the icon, not the name)."), On)
+		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 252),
+			function() return db.enabled and db.targetGlow end)
 
 		local reset = Button(page, "Reset all", 110)
 		reset:SetPoint("BOTTOMLEFT", COL1, 16)
