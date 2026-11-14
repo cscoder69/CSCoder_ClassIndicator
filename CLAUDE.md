@@ -12,8 +12,8 @@ default UI and the popular nameplate addons (Plater first).
 ## What it does
 - `Indicator.New/Style/Place`: one frame type for real plates and the preview. Icon =
   `UI-CHARACTERCREATE-CLASSES` + `CLASS_ICON_TCOORDS` (own copy as fallback), 7% cut off the edges.
-  Round = circle mask (`media/circle.tga`, copied from Quest Indicator); without mask support it
-  falls back to `UI-Classes-Circles`. Border = circle/white square behind the icon.
+  Shapes: round (circle mask), rounded square, square (`SHAPES`; masks made by `tools/make_shapes.lua`).
+  The border is a RING (shape texture cut by the `*_hole` mask with CLAMPTOWHITE) or 4 edges for square, so opacity never shows it through the icon. No mask support -> `UI-Classes-Circles`. Text on its own child frame above.
 - Parented to the game's nameplate frame, anchored to the visible health bar
   (`plate.unitFrame.healthBar` = Plater, `plate.UnitFrame.healthBar` = default UI) or the plate.
   Forbidden plates and secret values are skipped (instances on WoW Forever: BG/arena untested).
@@ -36,3 +36,9 @@ mock doesn't have (CLASS_ICON_TCOORDS, RAID_CLASS_COLORS...).
 ## State
 v0 written 2026-11-14, waiting for the user's first in-game test. English only (translate after
 the layout is approved). Junction already in AddOns. Local git only (ask before GitHub/CurseForge).
+
+## User notes (2026-11-14, after the first test)
+- Done: rounded square shape, separate "Show a border" switch, ring border (opacity was a mess
+  because the border was a full shape behind the icon), text on its own layer.
+- Open: the class name didn't show in the first screenshot (Plater, test mode) - check again.
+- Open: "o fundo ta preto" (black background) - not clear yet which background; ask for a print.

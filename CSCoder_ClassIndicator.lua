@@ -21,13 +21,14 @@ local ENEMY_RED = { 0.9, 0.1, 0.1, 1 }
 local DEFAULTS = {
 	enabled = true,
 	friends = false,       -- also on friendly players
-	shape = "round",       -- "round" | "square"
+	shape = "round",       -- "round" | "rounded" (rounded square) | "square"
 	size = 28,
 	alpha = 1,
 	anchor = "top",        -- side of the nameplate: top | bottom | left | right
 	offsetX = 0,
 	offsetY = 14,
-	borderMode = "class",  -- class | enemy | custom | none
+	border = true,         -- draw a border
+	borderMode = "class",  -- class | enemy | custom
 	borderColor = { 1, 0.82, 0, 1 },
 	borderSize = 2,
 	showText = true,
@@ -51,6 +52,7 @@ end
 local function LoadSettings()
 	CSCoderClassIndicatorDB = type(CSCoderClassIndicatorDB) == "table" and CSCoderClassIndicatorDB or {}
 	db = CSCoderClassIndicatorDB
+	if db.borderMode == "none" then db.border, db.borderMode = false, "class" end -- old "No border" choice
 	for key, value in pairs(DEFAULTS) do
 		if type(db[key]) ~= type(value) then db[key] = CopyValue(value) end
 	end
@@ -111,19 +113,36 @@ end
 
 local Indicator = {}
 
+-- Shapes: the icon's mask and the matching "hole" that cuts the border into a ring (so a
+-- lower opacity never shows the border through the icon). Square uses four edge lines.
+local SHAPES = {
+	round = { mask = MEDIA .. "circle", hole = MEDIA .. "circle_hole" },
+	rounded = { mask = MEDIA .. "rsquare", hole = MEDIA .. "rsquare_hole" },
+	square = {},
+}
+
 function Indicator.New(parent)
 	local f = CreateFrame("Frame", nil, parent)
 	f:SetSize(28, 28)
-	f.border = f:CreateTexture(nil, "BACKGROUND")
-	f.border:SetAllPoints()
 	f.icon = f:CreateTexture(nil, "ARTWORK")
-	f.text = f:CreateFontString(nil, "OVERLAY")
-	f.text:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
-	if f.icon.AddMaskTexture and f.CreateMaskTexture then
-		f.mask = f:CreateMaskTexture()
-		f.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-		f.mask:SetAllPoints(f.icon)
+	f.ring = f:CreateTexture(nil, "BORDER")
+	f.ring:SetAllPoints()
+	f.edges = {}
+	for i = 1, 4 do f.edges[i] = f:CreateTexture(nil, "BORDER") end
+	f.canMask = f.icon.AddMaskTexture and f.CreateMaskTexture and true or false
+	if f.canMask then
+		f.iconMask = f:CreateMaskTexture()
+		f.iconMask:SetAllPoints(f.icon)
+		f.icon:AddMaskTexture(f.iconMask)
+		f.holeMask = f:CreateMaskTexture()
+		f.holeMask:SetAllPoints(f.icon)
+		f.ring:AddMaskTexture(f.holeMask)
 	end
+	-- The text on its own layer above, so the nameplate addon never covers it.
+	f.textHolder = CreateFrame("Frame", nil, f)
+	f.textHolder:SetAllPoints()
+	f.textHolder:SetFrameLevel(f:GetFrameLevel() + 5)
+	f.text = f.textHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f:Hide()
 	return f
 end
@@ -142,15 +161,17 @@ function Indicator.Style(f, class, name)
 	local size = db.size
 	f:SetSize(size, size)
 	f:SetAlpha(db.alpha)
+	f.textHolder:SetFrameLevel(f:GetFrameLevel() + 5)
 
-	local round = db.shape == "round"
-	local border = db.borderMode ~= "none" and db.borderSize or 0
+	local shape = SHAPES[db.shape] and db.shape or "round"
+	local info = SHAPES[shape]
+	local border = db.border and db.borderSize or 0
 	f.icon:ClearAllPoints()
 	f.icon:SetPoint("TOPLEFT", border, -border)
 	f.icon:SetPoint("BOTTOMRIGHT", -border, border)
 
 	local l, r, t, b = coords[1], coords[2], coords[3], coords[4]
-	if round and not f.mask then
+	if shape ~= "square" and not f.canMask then
 		-- No mask support on this client: the game's own round class icons.
 		f.icon:SetTexture(CLASS_CIRCLES)
 		f.icon:SetTexCoord(l, r, t, b)
@@ -159,19 +180,30 @@ function Indicator.Style(f, class, name)
 		local cutX, cutY = (r - l) * 0.07, (b - t) * 0.07
 		f.icon:SetTexture(CLASS_TEXTURE)
 		f.icon:SetTexCoord(l + cutX, r - cutX, t + cutY, b - cutY)
-		if f.mask then
-			if round and not f.masked then f.icon:AddMaskTexture(f.mask); f.masked = true
-			elseif not round and f.masked then f.icon:RemoveMaskTexture(f.mask); f.masked = false end
-		end
+	end
+	if f.canMask then
+		f.iconMask:SetTexture(info.mask or WHITE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	end
 
-	if border > 0 then
-		local cr, cg, cb = ModeColor(db.borderMode, db.borderColor, class)
-		f.border:SetTexture(round and CIRCLE or WHITE)
-		f.border:SetVertexColor(cr, cg, cb, 1)
-		f.border:Show()
-	else
-		f.border:Hide()
+	local cr, cg, cb = ModeColor(db.borderMode, db.borderColor, class)
+	local ring = border > 0 and shape ~= "square" and f.canMask
+	if ring then
+		f.ring:SetTexture(info.mask)
+		f.ring:SetVertexColor(cr, cg, cb, 1)
+		f.holeMask:SetTexture(info.hole, "CLAMPTOWHITE", "CLAMPTOWHITE")
+	end
+	f.ring:SetShown(ring)
+	local square = border > 0 and (shape == "square" or not f.canMask)
+	for i, e in ipairs(f.edges) do
+		e:ClearAllPoints()
+		if square then
+			e:SetColorTexture(cr, cg, cb, 1)
+			if i == 1 then e:SetPoint("TOPLEFT"); e:SetPoint("TOPRIGHT"); e:SetHeight(border)
+			elseif i == 2 then e:SetPoint("BOTTOMLEFT"); e:SetPoint("BOTTOMRIGHT"); e:SetHeight(border)
+			elseif i == 3 then e:SetPoint("TOPLEFT", 0, -border); e:SetPoint("BOTTOMLEFT", 0, border); e:SetWidth(border)
+			else e:SetPoint("TOPRIGHT", 0, -border); e:SetPoint("BOTTOMRIGHT", 0, border); e:SetWidth(border) end
+		end
+		e:SetShown(square)
 	end
 
 	local text = f.text
@@ -595,7 +627,7 @@ do
 
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(760, 690)
+		window:SetSize(760, 720)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -631,7 +663,7 @@ do
 
 		local function On() return db.enabled end
 		local function TextOn() return db.enabled and db.showText end
-		local function BorderOn() return db.enabled and db.borderMode ~= "none" end
+		local function BorderOn() return db.enabled and db.border end
 
 		-- Column 1: Display + Icon.
 		local y = 0
@@ -646,7 +678,7 @@ do
 
 		y = y - 86
 		Heading(page, "Icon", COL1, y)
-		Gate(AddDropdown(page, "Shape", "shape", { { "round", "Round" }, { "square", "Square" } }, COL1, y - 22).button, On)
+		Gate(AddDropdown(page, "Shape", "shape", { { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" } }, COL1, y - 22).button, On)
 		Gate(AddSlider(page, "Size", "size", 12, 64, 1, COL1, y - 70).slider, On)
 		Gate(AddDropdown(page, "Position on the nameplate", "anchor", { { "top", "Top" }, { "bottom", "Bottom" },
 			{ "left", "Left" }, { "right", "Right" } }, COL1, y - 114,
@@ -659,13 +691,14 @@ do
 		-- Column 2: Border + Text.
 		y = 0
 		Heading(page, "Border", COL2, y)
+		Gate(AddCheck(page, "Show a border", "border", COL2, y - 24), On)
 		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "enemy", "Enemy red" },
-			{ "custom", "Custom color" }, { "none", "No border" } }, COL2, y - 22).button, On)
-		local borderSwatch = AddSwatch(page, "Custom color", "borderColor", COL2 + 214, y - 40)
-		Gate(borderSwatch, function() return db.enabled and db.borderMode == "custom" end)
-		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL2, y - 70).slider, BorderOn)
+			{ "custom", "Custom color" } }, COL2, y - 50).button, BorderOn)
+		Gate(AddSwatch(page, "Custom color", "borderColor", COL2 + 214, y - 68),
+			function() return BorderOn() and db.borderMode == "custom" end)
+		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL2, y - 98).slider, BorderOn)
 
-		y = y - 124
+		y = y - 150
 		Heading(page, "Class name", COL2, y)
 		Gate(AddCheck(page, "Show the class name", "showText", COL2, y - 24), On)
 		Gate(AddCheck(page, "Capital letters", "textUpper", COL2 + 180, y - 24), TextOn)
