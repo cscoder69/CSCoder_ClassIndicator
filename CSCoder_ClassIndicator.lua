@@ -48,6 +48,8 @@ local DEFAULTS = {
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
 	clickTarget = true,    -- click the icon to target that player
+	targetArrows = true,   -- ">>  <<" around your target's icon
+	arrowColor = { 1, 0.82, 0, 1 },
 }
 local SETTINGS_VERSION = 1
 
@@ -171,6 +173,27 @@ function Indicator.New(parent)
 		healer.parts[i] = t
 	end
 	f.healer = healer
+	-- Target arrows ">>" and "<<", pulsing.
+	f.arrows = {}
+	for i, glyph in ipairs({ ">>", "<<" }) do
+		local a = f.textHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		a:SetText(glyph)
+		a:Hide()
+		f.arrows[i] = a
+	end
+	f.arrowPulse = CreateFrame("Frame", nil, f)
+	f.arrowPulse:Hide()
+	f.arrowPulse:SetScript("OnUpdate", function(self, elapsed)
+		self.t = (self.t or 0) + elapsed
+		local alpha = 0.55 + 0.45 * math.abs(math.sin(self.t * 4))
+		local shift = 2 * math.sin(self.t * 8)
+		for i, a in ipairs(f.arrows) do
+			a:SetAlpha(alpha)
+			local side = i == 1 and -1 or 1
+			a:ClearAllPoints()
+			a:SetPoint(i == 1 and "RIGHT" or "LEFT", self.anchors[i], i == 1 and "LEFT" or "RIGHT", side * (3 + shift), 0)
+		end
+	end)
 	f:Hide()
 	return f
 end
@@ -277,6 +300,27 @@ function Indicator.Style(f, class, name, isTarget)
 		text:Show()
 	else
 		text:Hide()
+	end
+
+	-- Target arrows: outside the icon, and outside the text when it sits on that side.
+	local pulse = f.arrowPulse
+	if isTarget and db.targetArrows then
+		local c = db.arrowColor
+		local arrowSize = math.max(12, math.floor(size * 0.6))
+		local textShown = text:IsShown()
+		pulse.anchors = {
+			(textShown and db.textPos == "left") and text or f,
+			(textShown and db.textPos == "right") and text or f,
+		}
+		for _, a in ipairs(f.arrows) do
+			if not pcall(a.SetFont, a, STANDARD_TEXT_FONT, arrowSize, "THICKOUTLINE") then a:SetFontObject("GameFontNormalLarge") end
+			a:SetTextColor(c[1], c[2], c[3], 1)
+			a:Show()
+		end
+		pulse:Show()
+	else
+		pulse:Hide()
+		for _, a in ipairs(f.arrows) do a:Hide() end
 	end
 	return true
 end
@@ -866,6 +910,10 @@ do
 		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
 		Gate(AddCheck(page, "Click the icon to target", "clickTarget", COL3, y - 226,
 			"Left or right click on the icon targets that player. During combat the click spot can't move (game rule), so it may sit a few pixels off until the fight ends."), On)
+		Gate(AddCheck(page, ">> << around your target", "targetArrows", COL3, y - 252,
+			"Pulsing arrows on both sides of your current target's icon."), On)
+		Gate(AddSwatch(page, "Arrow color", "arrowColor", COL3 + 214, y - 252),
+			function() return db.enabled and db.targetArrows end)
 
 		local reset = Button(page, "Reset all", 110)
 		reset:SetPoint("BOTTOMLEFT", COL1, 16)
