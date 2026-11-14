@@ -57,8 +57,4 @@ the layout is approved). Junction already in AddOns. Local git only (ask before 
 - Suggested and not done yet: spec icon (from BG info), distance limit, profiles, minimap button,
   translations, setup guide, preview class choice.
 - Target highlight = pulsing GLOW of the icon shape (`media/glow_*.tga`, 1.6x the icon, ADD blend); the user rejected the ">> <<" arrows (they ran over the name). Healer cross has a 2 px outline (`healerOutline`).
-- Click to target (`clickTarget`, on, 2026-11-14): secure button (`Click.Update`) parented and
-  anchored to the NAMEPLATE frame at the icon's estimated spot (bar size read, assumed centred).
-  Never anchor it to the indicator or the addon's bar: that would make them protected and block
-  Plater/our updates in combat. Updated only out of combat; PLAYER_REGEN_ENABLED re-applies.
-  NOT tested in game yet. Preview background is now dark teal (user's "fundo preto").
+- Click to target: REMOVED. WoW Forever forbids targeting for addons ("only for the Blizzard UI" popup on TargetUnit) and the secure button never targeted (left clicks didn't even reach it). The way to click the icon is the nameplate addon's own click area: Plater > Advanced > Click Space height (enemy and friendly), "always show" to see it. Preview background is dark teal (user's "fundo preto").

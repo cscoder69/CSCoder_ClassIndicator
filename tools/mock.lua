@@ -193,11 +193,6 @@ print("sizes: big class 30, big + target 60", sizes[1], sizes[#sizes])
 print("target glow shown", ind.glow._shown)
 if ind.glowPulse._scripts.OnUpdate then try("glow pulse", ind.glowPulse._scripts.OnUpdate, ind.glowPulse, 0.1) end
 ind.SetSize = setSize
-print("click button made, unit set", plates.nameplate1.cciClick ~= nil)
-inCombat = true
-Fire("PLAYER_ENTERING_WORLD")
-inCombat = false
-Fire("PLAYER_REGEN_ENABLED")
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))
 print("controls clicked", clicked, "sliders", slid)

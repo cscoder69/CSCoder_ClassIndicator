@@ -52,7 +52,6 @@ local DEFAULTS = {
 	targetScale = 1.3,
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
-	clickTarget = true,    -- click the icon to target that player
 	targetGlow = true,     -- pulsing glow around your target's icon
 	glowColor = { 1, 0.82, 0, 1 },
 }
@@ -69,7 +68,7 @@ local function LoadSettings()
 	CSCoderClassIndicatorDB = type(CSCoderClassIndicatorDB) == "table" and CSCoderClassIndicatorDB or {}
 	db = CSCoderClassIndicatorDB
 	if db.borderMode == "none" then db.border, db.borderMode = false, "class" end -- old "No border" choice
-	db.targetArrows, db.arrowColor = nil, nil -- the target arrows became a glow
+	db.targetArrows, db.arrowColor, db.clickTarget = nil, nil, nil -- removed options
 	for key, value in pairs(DEFAULTS) do
 		if type(db[key]) ~= type(value) then db[key] = CopyValue(value) end
 	end
@@ -353,59 +352,8 @@ local function UnitWanted(unit)
 	return db.friends
 end
 
--- Click to target: a secure button over the icon (targeting is protected). Secure frames can't
--- be created, moved, shown or hidden in combat, so it is anchored to the nameplate frame itself
--- (never to the indicator or the addon's health bar, which would make THEM protected too) at
--- the icon's estimated spot, and only updated out of combat (re-applied when combat ends).
-local Click = { pending = false }
-function Click.Update(plate, unit, show, size)
-	if InCombatLockdown() then Click.pending = true return end
-	show = show and db.clickTarget
-	local b = plate.cciClick
-	if not b then
-		if not show then return end
-		local ok, button = pcall(CreateFrame, "Button", nil, plate, "SecureActionButtonTemplate")
-		if not ok or not button then return end
-		b = button
-		b:RegisterForClicks("AnyUp", "AnyDown")
-		b:SetAttribute("type", "target")
-		b:SetAttribute("type1", "target")
-		b:SetAttribute("type2", "target")
-		-- /ci debug turns a trace on: what each click did.
-		b:HookScript("OnClick", function(self, mouse, down)
-			if not Click.trace then return end
-			local unit = self:GetAttribute("unit")
-			print(string.format("|cffffd200CI click|r %s down=%s unit=%s type=%s exists=%s | target right after: %s",
-				tostring(mouse), tostring(down), tostring(unit), tostring(self:GetAttribute("type")),
-				tostring(unit and UnitExists(unit)), tostring(UnitName("target"))))
-			C_Timer.After(0.2, function()
-				print(string.format("|cffffd200CI click|r target now: %s (same unit: %s)", tostring(UnitName("target")),
-					tostring(unit and UnitIsUnit("target", unit))))
-			end)
-		end)
-		plate.cciClick = b
-	end
-	if show then
-		b:SetAttribute("unit", unit)
-		local bar = PlateTarget(plate)
-		local okW, bw = pcall(bar.GetWidth, bar)
-		local okH, bh = pcall(bar.GetHeight, bar)
-		bw = (okW and type(bw) == "number" and bar ~= plate) and bw or 100
-		bh = (okH and type(bh) == "number" and bar ~= plate) and bh or 10
-		local side, x, y = db.anchor, db.offsetX, db.offsetY
-		b:SetSize(size, size)
-		b:ClearAllPoints()
-		if side == "bottom" then b:SetPoint("TOP", plate, "CENTER", x, -bh / 2 - y)
-		elseif side == "left" then b:SetPoint("RIGHT", plate, "CENTER", -bw / 2 - y + x, 0)
-		elseif side == "right" then b:SetPoint("LEFT", plate, "CENTER", bw / 2 + y + x, 0)
-		else b:SetPoint("BOTTOM", plate, "CENTER", x, bh / 2 + y) end
-	end
-	b:SetShown(show)
-end
-
 local function HidePlate(plate)
 	if plate and plate.cciIndicator then plate.cciIndicator:Hide() end
-	if plate and plate.cciClick then Click.Update(plate, nil, false) end
 end
 
 local function UpdateUnit(unit)
@@ -436,7 +384,6 @@ local function UpdateUnit(unit)
 	if Indicator.Style(f, class, name, UnitIsUnit(unit, "target")) then
 		Indicator.Place(f, PlateTarget(plate))
 		f:Show()
-		Click.Update(plate, unit, true, f:GetWidth())
 	end
 end
 
@@ -926,11 +873,9 @@ do
 			Gate(b, On)
 		end
 		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
-		Gate(AddCheck(page, "Click the icon to target", "clickTarget", COL3, y - 226,
-			"Left or right click on the icon targets that player. During combat the click spot can't move (game rule), so it may sit a few pixels off until the fight ends."), On)
-		Gate(AddCheck(page, "Glow on your target", "targetGlow", COL3, y - 252,
+		Gate(AddCheck(page, "Glow on your target", "targetGlow", COL3, y - 226,
 			"A pulsing glow around your current target's icon (only the icon, not the name)."), On)
-		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 252),
+		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 226),
 			function() return db.enabled and db.targetGlow end)
 
 		local reset = Button(page, "Reset all", 110)
@@ -1016,7 +961,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		LoadSettings()
 		pcall(BuildLanding)
 		for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED", "PLAYER_REGEN_ENABLED" }) do
+			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED" }) do
 			pcall(self.RegisterEvent, self, e)
 		end
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
@@ -1037,46 +982,6 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 	msg = string.lower(msg or "")
 	if msg == "test" then
 		SetTestMode(not testMode)
-	elseif msg == "targettest" then
-		-- Can this addon target a nameplate unit at all? (plain function call, out of combat)
-		local plate = C_NamePlate.GetNamePlates()[1]
-		local unit = plate and (plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit))
-		print("|cffffd200CI|r targettest unit=" .. tostring(unit))
-		if unit then
-			local ok, err = pcall(TargetUnit, unit)
-			print("  TargetUnit ok=" .. tostring(ok) .. " err=" .. tostring(err) .. " target now: " .. tostring(UnitName("target")))
-		end
-	elseif msg == "debug" then
-		-- What is under the mouse, and the click buttons' state (hover an icon, then type it).
-		local function Describe(frame)
-			if not frame then return "nil" end
-			local ok, text = pcall(function()
-				return string.format("%s [%s] mouse=%s level=%s strata=%s", tostring(frame:GetName() or "?"),
-					frame:GetObjectType(), tostring(frame:IsMouseEnabled()), tostring(frame:GetFrameLevel()),
-					tostring(frame:GetFrameStrata()))
-			end)
-			return ok and text or "(can't read)"
-		end
-		local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
-		print("|cffffd200CI debug|r under the mouse:")
-		for _, frame in ipairs(foci or {}) do print("  " .. Describe(frame)) end
-		local made, shown = 0, 0
-		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
-			local b = plate.cciClick
-			if b then
-				made = made + 1
-				if b:IsVisible() then shown = shown + 1 end
-				if made <= 3 then
-					print(string.format("  click %s unit=%s visible=%s size=%dx%d %s", tostring(plate.namePlateUnitToken),
-						tostring(b:GetAttribute("unit")), tostring(b:IsVisible()), b:GetWidth(), b:GetHeight(), Describe(b)))
-				end
-			end
-		end
-		print(string.format("  plates %d, click buttons %d (visible %d), clickTarget=%s, combat=%s",
-			#(C_NamePlate.GetNamePlates() or {}), made, shown, tostring(db.clickTarget), tostring(InCombatLockdown())))
-		local keyDown = C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("ActionButtonUseKeyDown")
-		Click.trace = true
-		print("  ActionButtonUseKeyDown=" .. tostring(keyDown) .. " - click trace ON: now click an icon")
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
