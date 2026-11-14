@@ -65,6 +65,8 @@ env.Settings = {
 	RegisterCanvasLayoutSubcategory = function() return {} end,
 }
 env.HideUIPanel = function() end
+local inCombat = false
+env.InCombatLockdown = function() return inCombat end
 env.issecretvalue = function() return false end
 env.print = function(...) print("  [chat]", ...) end
 
@@ -187,6 +189,11 @@ env.UnitIsUnit = function(a, b) return a == b or (a == "nameplate1" and b == "ta
 Fire("PLAYER_TARGET_CHANGED")
 print("sizes: big class 30, big + target 60", sizes[1], sizes[#sizes])
 ind.SetSize = setSize
+print("click button made, unit set", plates.nameplate1.cciClick ~= nil)
+inCombat = true
+Fire("PLAYER_ENTERING_WORLD")
+inCombat = false
+Fire("PLAYER_REGEN_ENABLED")
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))
 print("controls clicked", clicked, "sliders", slid)

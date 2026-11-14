@@ -56,3 +56,8 @@ the layout is approved). Junction already in AddOns. Local git only (ask before 
   has 5 plates: the 3rd is "the target", the 5th a Priest (healer cross).
 - Suggested and not done yet: spec icon (from BG info), distance limit, profiles, minimap button,
   translations, setup guide, preview class choice.
+- Click to target (`clickTarget`, on, 2026-11-14): secure button (`Click.Update`) parented and
+  anchored to the NAMEPLATE frame at the icon's estimated spot (bar size read, assumed centred).
+  Never anchor it to the indicator or the addon's bar: that would make them protected and block
+  Plater/our updates in combat. Updated only out of combat; PLAYER_REGEN_ENABLED re-applies.
+  NOT tested in game yet. Preview background is now dark teal (user's "fundo preto").

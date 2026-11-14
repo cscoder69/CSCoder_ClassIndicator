@@ -47,6 +47,7 @@ local DEFAULTS = {
 	targetScale = 1.3,
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
+	clickTarget = true,    -- click the icon to target that player
 }
 local SETTINGS_VERSION = 1
 
@@ -314,8 +315,46 @@ local function UnitWanted(unit)
 	return db.friends
 end
 
+-- Click to target: a secure button over the icon (targeting is protected). Secure frames can't
+-- be created, moved, shown or hidden in combat, so it is anchored to the nameplate frame itself
+-- (never to the indicator or the addon's health bar, which would make THEM protected too) at
+-- the icon's estimated spot, and only updated out of combat (re-applied when combat ends).
+local Click = { pending = false }
+function Click.Update(plate, unit, show, size)
+	if InCombatLockdown() then Click.pending = true return end
+	show = show and db.clickTarget
+	local b = plate.cciClick
+	if not b then
+		if not show then return end
+		local ok, button = pcall(CreateFrame, "Button", nil, plate, "SecureActionButtonTemplate")
+		if not ok or not button then return end
+		b = button
+		b:RegisterForClicks("AnyUp", "AnyDown")
+		b:SetAttribute("type1", "target")
+		b:SetAttribute("type2", "target")
+		plate.cciClick = b
+	end
+	if show then
+		b:SetAttribute("unit", unit)
+		local bar = PlateTarget(plate)
+		local okW, bw = pcall(bar.GetWidth, bar)
+		local okH, bh = pcall(bar.GetHeight, bar)
+		bw = (okW and type(bw) == "number" and bar ~= plate) and bw or 100
+		bh = (okH and type(bh) == "number" and bar ~= plate) and bh or 10
+		local side, x, y = db.anchor, db.offsetX, db.offsetY
+		b:SetSize(size, size)
+		b:ClearAllPoints()
+		if side == "bottom" then b:SetPoint("TOP", plate, "CENTER", x, -bh / 2 - y)
+		elseif side == "left" then b:SetPoint("RIGHT", plate, "CENTER", -bw / 2 - y + x, 0)
+		elseif side == "right" then b:SetPoint("LEFT", plate, "CENTER", bw / 2 + y + x, 0)
+		else b:SetPoint("BOTTOM", plate, "CENTER", x, bh / 2 + y) end
+	end
+	b:SetShown(show)
+end
+
 local function HidePlate(plate)
 	if plate and plate.cciIndicator then plate.cciIndicator:Hide() end
+	if plate and plate.cciClick then Click.Update(plate, nil, false) end
 end
 
 local function UpdateUnit(unit)
@@ -346,6 +385,7 @@ local function UpdateUnit(unit)
 	if Indicator.Style(f, class, name, UnitIsUnit(unit, "target")) then
 		Indicator.Place(f, PlateTarget(plate))
 		f:Show()
+		Click.Update(plate, unit, true, f:GetWidth())
 	end
 end
 
@@ -638,7 +678,12 @@ do
 		box:SetPoint("TOPLEFT", 16, -44)
 		box:SetPoint("TOPRIGHT", -16, -44)
 		box:SetHeight(170)
-		Fill(box, 0.03, 0.03, 0.03, 1)
+		-- A dark teal like an outdoor scene, so the preview reads like the world.
+		Fill(box, 0.05, 0.13, 0.15, 1)
+		local shade = box:CreateTexture(nil, "BACKGROUND", nil, 1)
+		shade:SetPoint("BOTTOMLEFT"); shade:SetPoint("BOTTOMRIGHT")
+		shade:SetHeight(70)
+		shade:SetColorTexture(0.04, 0.09, 0.06, 0.8)
 		Edges(box, GOLD[1], GOLD[2], GOLD[3], 0.35)
 		local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 		hint:SetPoint("BOTTOMRIGHT", -8, 6)
@@ -819,6 +864,8 @@ do
 			Gate(b, On)
 		end
 		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
+		Gate(AddCheck(page, "Click the icon to target", "clickTarget", COL3, y - 226,
+			"Left or right click on the icon targets that player. During combat the click spot can't move (game rule), so it may sit a few pixels off until the fight ends."), On)
 
 		local reset = Button(page, "Reset all", 110)
 		reset:SetPoint("BOTTOMLEFT", COL1, 16)
@@ -903,7 +950,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		LoadSettings()
 		pcall(BuildLanding)
 		for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED" }) do
+			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED", "PLAYER_REGEN_ENABLED" }) do
 			pcall(self.RegisterEvent, self, e)
 		end
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
