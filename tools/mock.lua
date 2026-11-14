@@ -172,11 +172,13 @@ end
 local info = env.ColorPickerFrame._info
 if info then try("color apply", info.swatchFunc); try("color cancel", info.cancelFunc) end
 -- Every shape / mode combination draws.
-for _, shape in ipairs({ "round", "rounded", "square" }) do
+for _, shape in ipairs({ "round", "rounded", "square", "hex", "diamond", "shield" }) do
 	for _, border in ipairs({ "class", "enemy", "custom", "off" }) do
 		for _, pos in ipairs({ "below", "above", "left", "right" }) do
 			for _, anchor in ipairs({ "top", "bottom", "left", "right" }) do
 				db.shape, db.textPos, db.anchor = shape, pos, anchor
+				db.textBg = ({ "none", "plate", "ribbon" })[(#pos + #anchor) % 3 + 1]
+				db.borderStyle, db.iconShadow = (#shape % 2 == 0) and "metal" or "flat", #pos % 2 == 0
 				db.border = border ~= "off"; if db.border then db.borderMode = border end
 				Fire("PLAYER_ENTERING_WORLD")
 			end

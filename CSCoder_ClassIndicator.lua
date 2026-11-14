@@ -21,7 +21,7 @@ local ENEMY_RED = { 0.9, 0.1, 0.1, 1 }
 local DEFAULTS = {
 	enabled = true,
 	friends = false,       -- also on friendly players
-	shape = "round",       -- "round" | "rounded" (rounded square) | "square"
+	shape = "round",       -- round | rounded (rounded square) | square | hex | diamond | shield
 	size = 28,
 	alpha = 1,
 	anchor = "top",        -- side of the nameplate: top | bottom | left | right
@@ -31,6 +31,11 @@ local DEFAULTS = {
 	borderMode = "class",  -- class | enemy | custom
 	borderColor = { 1, 0.82, 0, 1 },
 	borderSize = 2,
+	borderStyle = "flat",  -- flat | metal (a shine tinted with the border colour)
+	iconShadow = false,    -- soft dark shadow under the icon
+	textBg = "none",       -- name background: none | plate (dark) | ribbon (coloured, notched end)
+	textBgMode = "class",  -- plate edge / ribbon colour: class | enemy | dark | custom
+	textBgColor = { 0.6, 0.1, 0.1, 1 },
 	showText = true,
 	textPos = "below",     -- side of the icon: below | above | left | right
 	textX = 0,
@@ -190,12 +195,19 @@ end
 
 local Indicator = {}
 
--- Shapes: the icon's mask and the matching "hole" that cuts the border into a ring (so a
--- lower opacity never shows the border through the icon). Square uses four edge lines.
+-- Shapes (textures made by tools/make_shapes.lua): the icon's mask, the "hole" that cuts the
+-- border into a ring (so a lower opacity never shows the border through the icon), a metal
+-- version of the shape for the metal border, and the soft glow.
+local function Shape(mask, glow)
+	return { mask = MEDIA .. mask, hole = MEDIA .. mask .. "_hole", metal = MEDIA .. mask .. "_metal", glow = MEDIA .. "glow_" .. glow }
+end
 local SHAPES = {
-	round = { mask = MEDIA .. "circle", hole = MEDIA .. "circle_hole" },
-	rounded = { mask = MEDIA .. "rsquare", hole = MEDIA .. "rsquare_hole" },
-	square = {},
+	round = Shape("circle", "round"),
+	rounded = Shape("rsquare", "rounded"),
+	square = Shape("square", "square"),
+	hex = Shape("hex", "hex"),
+	diamond = Shape("diamond", "diamond"),
+	shield = Shape("shield", "shield"),
 }
 
 function Indicator.New(parent)
@@ -204,7 +216,7 @@ function Indicator.New(parent)
 	f.icon = f:CreateTexture(nil, "ARTWORK")
 	f.ring = f:CreateTexture(nil, "BORDER")
 	f.ring:SetAllPoints()
-	f.edges = {}
+	f.edges = {} -- square border without mask support
 	for i = 1, 4 do f.edges[i] = f:CreateTexture(nil, "BORDER") end
 	f.canMask = f.icon.AddMaskTexture and f.CreateMaskTexture and true or false
 	if f.canMask then
@@ -215,11 +227,23 @@ function Indicator.New(parent)
 		f.holeMask:SetAllPoints(f.icon)
 		f.ring:AddMaskTexture(f.holeMask)
 	end
-	-- The text on its own layer above, so the nameplate addon never covers it.
+	-- Drop shadow: the shape's soft glow in black, a little down and right.
+	f.shadow = f:CreateTexture(nil, "BACKGROUND", nil, -8)
+	f.shadow:Hide()
+	-- The text on its own layer above, so the nameplate addon never covers it, with its
+	-- optional background (dark plate or coloured ribbon) right under it.
 	f.textHolder = CreateFrame("Frame", nil, f)
 	f.textHolder:SetAllPoints()
 	f.textHolder:SetFrameLevel(f:GetFrameLevel() + 5)
 	f.text = f.textHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	local bg = {}
+	bg.fill = f.textHolder:CreateTexture(nil, "BACKGROUND")
+	bg.fill:SetTexture(WHITE)
+	bg.tip = f.textHolder:CreateTexture(nil, "BACKGROUND")
+	bg.tip:SetTexture(MEDIA .. "ribbon_end")
+	bg.edges = {}
+	for i = 1, 4 do bg.edges[i] = f.textHolder:CreateTexture(nil, "BORDER") end
+	f.textBg = bg
 	-- Healer mark: a green cross with a dark outline at the icon's top-right corner.
 	local healer = CreateFrame("Frame", nil, f)
 	healer:SetFrameLevel(f:GetFrameLevel() + 6)
@@ -251,7 +275,23 @@ local function ModeColor(mode, custom, class)
 	if mode == "class" then return ClassColor(class) end
 	if mode == "enemy" then return ENEMY_RED[1], ENEMY_RED[2], ENEMY_RED[3] end
 	if mode == "white" then return 1, 1, 1 end
+	if mode == "dark" then return 0.08, 0.07, 0.06 end
 	return custom[1], custom[2], custom[3]
+end
+
+-- Four 1 px lines around a region (or hidden).
+local function PlaceEdges(edges, region, show, r, g, b)
+	for i, e in ipairs(edges) do
+		e:ClearAllPoints()
+		if show then
+			e:SetColorTexture(r, g, b, 1)
+			if i == 1 then e:SetPoint("TOPLEFT", region); e:SetPoint("TOPRIGHT", region); e:SetHeight(1)
+			elseif i == 2 then e:SetPoint("BOTTOMLEFT", region); e:SetPoint("BOTTOMRIGHT", region); e:SetHeight(1)
+			elseif i == 3 then e:SetPoint("TOPLEFT", region); e:SetPoint("BOTTOMLEFT", region); e:SetWidth(1)
+			else e:SetPoint("TOPRIGHT", region); e:SetPoint("BOTTOMRIGHT", region); e:SetWidth(1) end
+		end
+		e:SetShown(show)
+	end
 end
 
 -- Draw the indicator for a class (class = "MAGE", name = the text to show; isTarget = it is
@@ -268,6 +308,8 @@ function Indicator.Style(f, class, name, isTarget)
 	f.textHolder:SetFrameLevel(f:GetFrameLevel() + 5)
 
 	local shape = SHAPES[db.shape] and db.shape or "round"
+	-- Without mask support only round (the game's round icons) and square can be drawn.
+	if not f.canMask and shape ~= "round" then shape = "square" end
 	local info = SHAPES[shape]
 	local border = db.border and db.borderSize or 0
 	f.icon:ClearAllPoints()
@@ -275,8 +317,7 @@ function Indicator.Style(f, class, name, isTarget)
 	f.icon:SetPoint("BOTTOMRIGHT", -border, border)
 
 	local l, r, t, b = coords[1], coords[2], coords[3], coords[4]
-	if shape ~= "square" and not f.canMask then
-		-- No mask support on this client: the game's own round class icons.
+	if shape == "round" and not f.canMask then
 		f.icon:SetTexture(CLASS_CIRCLES)
 		f.icon:SetTexCoord(l, r, t, b)
 	else
@@ -286,18 +327,19 @@ function Indicator.Style(f, class, name, isTarget)
 		f.icon:SetTexCoord(l + cutX, r - cutX, t + cutY, b - cutY)
 	end
 	if f.canMask then
-		f.iconMask:SetTexture(info.mask or WHITE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		f.iconMask:SetTexture(info.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	end
 
+	-- Border: a ring of the shape (flat colour, or the metal shine tinted with that colour).
 	local cr, cg, cb = ModeColor(db.borderMode, db.borderColor, class)
-	local ring = border > 0 and shape ~= "square" and f.canMask
+	local ring = border > 0 and f.canMask
 	if ring then
-		f.ring:SetTexture(info.mask)
+		f.ring:SetTexture(db.borderStyle == "metal" and info.metal or info.mask)
 		f.ring:SetVertexColor(cr, cg, cb, 1)
 		f.holeMask:SetTexture(info.hole, "CLAMPTOWHITE", "CLAMPTOWHITE")
 	end
 	f.ring:SetShown(ring)
-	local square = border > 0 and (shape == "square" or not f.canMask)
+	local square = border > 0 and not f.canMask
 	for i, e in ipairs(f.edges) do
 		e:ClearAllPoints()
 		if square then
@@ -308,6 +350,18 @@ function Indicator.Style(f, class, name, isTarget)
 			else e:SetPoint("TOPRIGHT", 0, -border); e:SetPoint("BOTTOMRIGHT", 0, border); e:SetWidth(border) end
 		end
 		e:SetShown(square)
+	end
+
+	-- Drop shadow.
+	if db.iconShadow then
+		f.shadow:SetTexture(info.glow)
+		f.shadow:SetVertexColor(0, 0, 0, 1)
+		f.shadow:SetSize(size * 1.6, size * 1.6)
+		f.shadow:ClearAllPoints()
+		f.shadow:SetPoint("CENTER", f, "CENTER", 2, -2)
+		f.shadow:Show()
+	else
+		f.shadow:Hide()
 	end
 
 	-- Healer mark: a cross about 40% of the icon, outlined.
@@ -331,7 +385,8 @@ function Indicator.Style(f, class, name, isTarget)
 		healer:Hide()
 	end
 
-	local text = f.text
+	local text, bg = f.text, f.textBg
+	local plate, ribbon = false, false
 	if db.showText and name then
 		if db.textFormat == "short" then name = SHORT_NAMES[class] or name end
 		local outline = db.textOutline
@@ -347,20 +402,52 @@ function Indicator.Style(f, class, name, isTarget)
 		text:SetTextColor(ModeColor(db.textMode, db.textColor, class))
 		text:ClearAllPoints()
 		local pos, x, y = db.textPos, db.textX, db.textY
-		if pos == "above" then text:SetPoint("BOTTOM", f, "TOP", x, 2 + y)
-		elseif pos == "left" then text:SetPoint("RIGHT", f, "LEFT", -3 + x, y)
-		elseif pos == "right" then text:SetPoint("LEFT", f, "RIGHT", 3 + x, y)
-		else text:SetPoint("TOP", f, "BOTTOM", x, -2 + y) end
+		-- With a background the text sits a little further out, so the plate clears the icon.
+		local pad = db.textBg ~= "none" and 4 or 0
+		if pos == "above" then text:SetPoint("BOTTOM", f, "TOP", x, 2 + pad + y)
+		elseif pos == "left" then text:SetPoint("RIGHT", f, "LEFT", -3 - pad * 2 + x, y)
+		elseif pos == "right" then text:SetPoint("LEFT", f, "RIGHT", 3 + pad * 2 + x, y)
+		else text:SetPoint("TOP", f, "BOTTOM", x, -2 - pad + y) end
 		text:Show()
+		plate, ribbon = db.textBg == "plate", db.textBg == "ribbon"
 	else
 		text:Hide()
 	end
 
+	-- Name background: a dark plate with a thin edge, or a coloured ribbon with a notched end
+	-- (pointing away from the icon).
+	local br, bgc, bb = ModeColor(db.textBgMode, db.textBgColor, class)
+	local padX, padY = 6, 3
+	bg.fill:ClearAllPoints()
+	bg.tip:ClearAllPoints()
+	if plate or ribbon then
+		bg.fill:SetPoint("TOPLEFT", text, "TOPLEFT", -padX, padY)
+		bg.fill:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", padX, -padY)
+	end
+	if plate then
+		bg.fill:SetVertexColor(0, 0, 0, 0.7)
+	elseif ribbon then
+		bg.fill:SetVertexColor(br, bgc, bb, 0.9)
+		local h = db.textSize + padY * 2
+		local flip = db.textPos == "left"
+		bg.tip:SetSize(h * 0.6, h)
+		bg.tip:SetVertexColor(br, bgc, bb, 0.9)
+		if flip then
+			bg.tip:SetTexCoord(1, 0, 0, 1)
+			bg.tip:SetPoint("RIGHT", bg.fill, "LEFT")
+		else
+			bg.tip:SetTexCoord(0, 1, 0, 1)
+			bg.tip:SetPoint("LEFT", bg.fill, "RIGHT")
+		end
+	end
+	bg.fill:SetShown(plate or ribbon)
+	bg.tip:SetShown(ribbon)
+	PlaceEdges(bg.edges, bg.fill, plate, br, bgc, bb)
+
 	-- Target glow: same shape as the icon, the texture is 1.6x the icon (make_shapes.lua).
 	if isTarget and db.targetGlow then
 		local c = db.glowColor
-		local glowShape = shape == "square" and "square" or (f.canMask and shape or "round")
-		f.glow:SetTexture(MEDIA .. "glow_" .. glowShape)
+		f.glow:SetTexture(info.glow)
 		f.glow:SetSize(size * 1.6, size * 1.6)
 		f.glow:SetVertexColor(c[1], c[2], c[3], 1)
 		f.glow:Show()
@@ -1024,7 +1111,7 @@ do
 
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(1060, 750)
+		window:SetSize(1060, 790)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -1103,7 +1190,7 @@ do
 
 		y = y - 86
 		Heading(page, "Icon", COL1, y)
-		Gate(AddDropdown(page, "Shape", "shape", { { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" } }, COL1, y - 22).button, On)
+		Gate(AddDropdown(page, "Shape", "shape", { { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" }, { "hex", "Hexagon" }, { "diamond", "Diamond" }, { "shield", "Shield" } }, COL1, y - 22).button, On)
 		Gate(AddSlider(page, "Size", "size", 12, 64, 1, COL1, y - 70).slider, On)
 		Gate(AddDropdown(page, "Position on the nameplate", "anchor", { { "top", "Top" }, { "bottom", "Bottom" },
 			{ "left", "Left" }, { "right", "Right" } }, COL1, y - 114,
@@ -1112,6 +1199,18 @@ do
 		Gate(AddSlider(page, "Y (distance)", "offsetY", -150, 150, 1, COL1, y - 206,
 			"Distance from the health bar. Raise it to clear the name text.").slider, On)
 		Gate(AddSlider(page, "Opacity", "alpha", 0.2, 1, 0.05, COL1, y - 250).slider, On)
+		Gate(AddCheck(page, "Shadow under the icon", "iconShadow", COL1, y - 298), On)
+
+		-- Name background (under the class name).
+		local function BgOn() return db.enabled and db.showText and db.textBg ~= "none" end
+		Heading(page, "Name background", COL1, y - 330)
+		Gate(AddDropdown(page, "Style", "textBg", { { "none", "None" }, { "plate", "Dark plate" }, { "ribbon", "Ribbon" } }, COL1, y - 352,
+			"A dark plate with a thin edge, or a colored ribbon with a notched end, behind the class name.").button,
+			function() return db.enabled and db.showText end)
+		Gate(AddDropdown(page, "Color (plate edge / ribbon)", "textBgMode", { { "class", "Class color" }, { "enemy", "Enemy red" },
+			{ "dark", "Dark" }, { "custom", "Custom color" } }, COL1, y - 400).button, BgOn)
+		Gate(AddSwatch(page, "Custom color", "textBgColor", COL1 + 214, y - 418),
+			function() return BgOn() and db.textBgMode == "custom" end)
 
 		-- Column 2: Class name.
 		y = 0
@@ -1150,9 +1249,11 @@ do
 			{ "custom", "Custom color" } }, COL3, y - 50).button, BorderOn)
 		Gate(AddSwatch(page, "Custom color", "borderColor", COL3 + 214, y - 68),
 			function() return BorderOn() and db.borderMode == "custom" end)
-		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL3, y - 98).slider, BorderOn)
+		Gate(AddDropdown(page, "Border style", "borderStyle", { { "flat", "Flat color" }, { "metal", "Metal shine" } }, COL3, y - 98,
+			"Metal shine: a light-dark-light shine tinted with the border color (gold looks like polished metal).").button, BorderOn)
+		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL3, y - 146).slider, BorderOn)
 
-		y = y - 160
+		y = y - 208
 		Heading(page, "PvP", COL3, y)
 		Gate(AddCheck(page, "Mark healer classes", "healerMark", COL3, y - 24,
 			"A green cross on classes that can heal (Priest, Druid, Paladin, Shaman...). Usually the first one to kill."), On)

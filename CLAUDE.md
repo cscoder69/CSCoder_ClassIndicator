@@ -74,3 +74,13 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   Profile, New + Existing Profiles, Copy From, Delete a Profile with confirm, Export / Import with
   a "CCI1:" text in `CSCoder_ClassIndicatorShare`). Tabs Settings | Profiles in the title bar.
   The bottom profile bar was removed (user: "faz igual o outro").
+
+## More looks (2026-11-14; backup before: tag `backup-before-new-shapes` + Backups/ClassIndicator_before_new_shapes_*)
+- Shapes: round, rounded, square, hex, diamond, shield. ALL textures come from
+  `tools/make_shapes.lua` (one SDF per shape): <mask>, <mask>_hole, <mask>_metal, glow_<key>,
+  ribbon_end. Every shape (square too) uses the ring border when masks exist.
+- `borderStyle` flat | metal (the *_metal shine tinted with the border colour).
+- `iconShadow`: black glow of the shape, offset (2,-2).
+- Name background `textBg` none | plate (dark, 1 px edge) | ribbon (coloured, notched tip pointing
+  away from the icon), colour `textBgMode` class | enemy | dark | custom. Col 1 "Name background".
+- Window 1060x790. The current look (round, flat border, no background) is still the default.
