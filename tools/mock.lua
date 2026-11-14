@@ -180,6 +180,8 @@ print("mage: no healer cross", not ind.healer._shown)
 units.nameplate1.class, units.nameplate1.name = "PRIEST", "Priest"
 Fire("PLAYER_ENTERING_WORLD")
 print("priest: healer cross", ind.healer._shown)
+for _, p in ipairs({ "topright", "topleft", "bottomright", "bottomleft", "center" }) do db.healerPos = p; Fire("PLAYER_ENTERING_WORLD") end
+print("healer positions drawn", ind.healer._shown)
 local sizes = {}
 local setSize = ind.SetSize
 ind.SetSize = function(self, w) sizes[#sizes + 1] = w end

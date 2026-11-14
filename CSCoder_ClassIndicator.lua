@@ -44,6 +44,10 @@ local DEFAULTS = {
 	textShadow = true,
 	healerMark = true,     -- green cross on classes that can heal
 	healerOutline = true,   -- dark outline around the healer cross
+	healerSize = 0.42,      -- cross size, share of the icon
+	healerPos = "topright", -- topright | topleft | bottomright | bottomleft | center
+	healerX = 0,
+	healerY = 0,
 	targetBigger = true,   -- your current target's icon is bigger
 	targetScale = 1.3,
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
@@ -256,11 +260,15 @@ function Indicator.Style(f, class, name, isTarget)
 	-- Healer mark: a cross about 40% of the icon, outlined.
 	local healer = f.healer
 	if db.healerMark and HEALER_CLASSES[class] then
-		local s = math.max(8, math.floor(size * 0.42))
+		local s = math.max(6, math.floor(size * db.healerSize))
 		local bar = math.max(2, math.floor(s / 3))
 		healer:SetSize(s + 4, s + 4)
 		healer:ClearAllPoints()
-		healer:SetPoint("CENTER", f, "TOPRIGHT", -s * 0.2, -s * 0.2)
+		local pos = db.healerPos
+		local inX = pos:find("left") and 1 or -1
+		local inY = pos:find("top") and -1 or 1
+		if pos == "center" then healer:SetPoint("CENTER", f, "CENTER", db.healerX, db.healerY)
+		else healer:SetPoint("CENTER", f, string.upper(pos), inX * s * 0.2 + db.healerX, inY * s * 0.2 + db.healerY) end
 		local p = healer.parts
 		p[1]:SetSize(s + 4, bar + 4); p[2]:SetSize(bar + 4, s + 4)
 		p[3]:SetSize(s, bar); p[4]:SetSize(bar, s)
@@ -537,14 +545,15 @@ do
 	local function Round(value, step)
 		return math.floor(value / step + 0.5) * step
 	end
-	local function AddSlider(parent, text, key, low, high, step, x, y, tip)
+	local function AddSlider(parent, text, key, low, high, step, x, y, tip, width)
+		width = width or CONTROL_W
 		local holder = CreateFrame("Frame", nil, parent)
-		holder:SetSize(CONTROL_W + 70, 40)
+		holder:SetSize(width + 70, 40)
 		holder:SetPoint("TOPLEFT", x, y)
 		Label(holder, text, 0, 0)
 		local s = CreateFrame("Slider", nil, holder)
 		s:SetOrientation("HORIZONTAL")
-		s:SetSize(CONTROL_W, 14)
+		s:SetSize(width, 14)
 		s:SetPoint("TOPLEFT", 0, -18)
 		local track = s:CreateTexture(nil, "BACKGROUND")
 		track:SetColorTexture(0.2, 0.17, 0.12, 1)
@@ -791,7 +800,7 @@ do
 
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(1060, 720)
+		window:SetSize(1060, 760)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -871,6 +880,15 @@ do
 		Gate(AddDropdown(page, "Outline", "textOutline", { { "", "None" }, { "OUTLINE", "Outline" },
 			{ "THICKOUTLINE", "Thick outline" } }, COL2, y - 326).button, TextOn)
 		Gate(AddCheck(page, "Shadow", "textShadow", COL2 + 214, y - 344), TextOn)
+
+		-- Healer cross: where and how big (the switch and outline are in PvP).
+		local function HealerOn() return db.enabled and db.healerMark end
+		Heading(page, "Healer cross", COL2, y - 384)
+		Gate(AddDropdown(page, "Position", "healerPos", { { "topright", "Top right" }, { "topleft", "Top left" },
+			{ "bottomright", "Bottom right" }, { "bottomleft", "Bottom left" }, { "center", "Center" } }, COL2, y - 406).button, HealerOn)
+		Gate(AddSlider(page, "Size", "healerSize", 0.2, 1, 0.02, COL2 + 214, y - 406, nil, 70).slider, HealerOn)
+		Gate(AddSlider(page, "X", "healerX", -30, 30, 1, COL2, y - 454, nil, 110).slider, HealerOn)
+		Gate(AddSlider(page, "Y", "healerY", -30, 30, 1, COL2 + 180, y - 454, nil, 110).slider, HealerOn)
 
 		-- Column 3: Border + PvP.
 		y = 0
