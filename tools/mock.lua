@@ -87,7 +87,15 @@ end
 env.C_NamePlate = {
 	GetNamePlateForUnit = function(unit) return plates[unit] end,
 	GetNamePlates = function() local t = {} for _, p in pairs(plates) do t[#t + 1] = p end return t end,
+	GetNamePlateEnemySize = function() return 110, 45 end,
+	GetNamePlateFriendlySize = function() return 110, 45 end,
+	SetNamePlateEnemySize = function(w, h) env._enemySize = { w, h } end,
+	SetNamePlateFriendlySize = function(w, h) env._friendlySize = { w, h } end,
 }
+env.hooksecurefunc = function(t, name, fn)
+	local old = t[name]
+	t[name] = function(...) local r = { old(...) } fn(...) return unpack(r) end
+end
 env.UnitIsPlayer = function(u) return units[u] and units[u].player or false end
 env.UnitIsUnit = function(a, b) return a == b end
 env.UnitCanAttack = function(_, u) return units[u] and units[u].enemy or false end
@@ -195,6 +203,14 @@ if ind.glowPulse._scripts.OnUpdate then try("glow pulse", ind.glowPulse._scripts
 ind.SetSize = setSize
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))
+db.clickable, db.anchor, db.offsetY, db.size = true, "top", 14, 28
+env.CSCoderOptionsParent = env.CSCoderOptionsParent
+Fire("PLAYER_ENTERING_WORLD")
+print("click area enlarged (enemy height > 45)", env._enemySize and env._enemySize[2] > 45, env._enemySize and env._enemySize[2])
+env.C_NamePlate.SetNamePlateEnemySize(130, 50) -- another addon sets its own size
+print("other addon size kept as base, ours on top", env._enemySize[1] >= 130 and env._enemySize[2] > 50)
+db.clickable = false; Fire("PLAYER_ENTERING_WORLD")
+print("off -> back to the base", env._enemySize[2] == 50)
 print("controls clicked", clicked, "sliders", slid)
 local names = {}
 for k in pairs(nilGlobals) do names[#names + 1] = k end

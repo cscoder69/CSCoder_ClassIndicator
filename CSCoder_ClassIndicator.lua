@@ -52,6 +52,7 @@ local DEFAULTS = {
 	targetScale = 1.3,
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
+	clickable = true,      -- enlarge the game's nameplate click box to cover the icon
 	targetGlow = true,     -- pulsing glow around your target's icon
 	glowColor = { 1, 0.82, 0, 1 },
 }
@@ -395,8 +396,71 @@ local function RefreshAll()
 	end
 end
 
+-- Clickable icon: addons can't target on this client, but the GAME targets whatever you click
+-- inside a nameplate's click box. That box is the game's own (default UI, Plater and every other
+-- nameplate addon share it), so it is enlarged to cover the icon. Whoever sets the size (the game,
+-- Plater...) stays in charge of the base; this only adds what the icon needs on top. Sizes can
+-- only change out of combat (re-applied when it ends).
+local ClickArea = { base = {}, busy = false, pending = false }
+function ClickArea.Needed()
+	-- (the target's bigger icon doesn't count: it is already your target)
+	local mult = 1
+	if next(db.bigClasses) then mult = mult * math.max(1, db.bigScale) end
+	local icon = db.size * mult
+	local barW, barH = 120, 12 -- the box is centred on the plate, around the bar
+	local ox, oy = math.abs(db.offsetX), math.abs(db.offsetY)
+	if db.anchor == "left" or db.anchor == "right" then
+		return 2 * (barW / 2 + oy + ox + icon) + 4, icon + 4
+	end
+	return 2 * (ox + icon / 2) + 4, 2 * (barH / 2 + oy + icon) + 4
+end
+function ClickArea.Apply(kind) -- "Enemy" | "Friendly"
+	if not (db and C_NamePlate) then return end
+	local getter, setter = C_NamePlate["GetNamePlate" .. kind .. "Size"], C_NamePlate["SetNamePlate" .. kind .. "Size"]
+	if not (getter and setter) then return end
+	local base = ClickArea.base[kind]
+	if not base then
+		local ok, w, h = pcall(getter)
+		if not (ok and type(w) == "number" and type(h) == "number") then return end
+		base = { w, h }
+		ClickArea.base[kind] = base
+	end
+	local w, h = base[1], base[2]
+	if db.enabled and db.clickable and (kind == "Enemy" or db.friends or testMode) then
+		local nw, nh = ClickArea.Needed()
+		w, h = math.max(w, nw), math.max(h, nh)
+	end
+	if InCombatLockdown() then ClickArea.pending = true return end
+	ClickArea.busy = true
+	local ok = pcall(setter, w, h)
+	ClickArea.busy = false
+	if not ok and not ClickArea.warned then
+		ClickArea.warned = true
+		print("|cffffd200" .. TITLE .. "|r: the game didn't let the nameplate click area change, so the icon can't be clicked.")
+	end
+end
+function ClickArea.ApplyAll()
+	ClickArea.pending = false
+	ClickArea.Apply("Enemy")
+	ClickArea.Apply("Friendly")
+end
+-- Someone else set a size (the game on its options, Plater on its own): that is the new base.
+-- Hooked at load, before nameplate addons (they load after "CSCoder_...") keep a reference.
+if C_NamePlate and hooksecurefunc then
+	for _, kind in ipairs({ "Enemy", "Friendly" }) do
+		if C_NamePlate["SetNamePlate" .. kind .. "Size"] then
+			hooksecurefunc(C_NamePlate, "SetNamePlate" .. kind .. "Size", function(w, h)
+				if ClickArea.busy or type(w) ~= "number" or type(h) ~= "number" then return end
+				ClickArea.base[kind] = { w, h }
+				C_Timer.After(0, function() ClickArea.Apply(kind) end)
+			end)
+		end
+	end
+end
+
 local function Changed()
 	RefreshAll()
+	ClickArea.ApplyAll()
 	if UpdatePreview then UpdatePreview() end
 end
 
@@ -873,6 +937,8 @@ do
 			Gate(b, On)
 		end
 		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
+		Gate(AddCheck(page, "Clickable icon", "clickable", COL3, y - 278,
+			"Clicking the icon targets that player. It enlarges the game's own nameplate click area to cover the icon (works with the default UI and nameplate addons). Changes apply out of combat."), On)
 		Gate(AddCheck(page, "Glow on your target", "targetGlow", COL3, y - 226,
 			"A pulsing glow around your current target's icon (only the icon, not the name)."), On)
 		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 226),
@@ -961,9 +1027,13 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		LoadSettings()
 		pcall(BuildLanding)
 		for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED" }) do
+			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED", "PLAYER_REGEN_ENABLED" }) do
 			pcall(self.RegisterEvent, self, e)
 		end
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		if ClickArea.pending then ClickArea.ApplyAll() end
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		C_Timer.After(0.1, function() RefreshAll(); ClickArea.ApplyAll() end)
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
 		UpdateUnit(arg1)
 	elseif event == "NAME_PLATE_UNIT_REMOVED" then
