@@ -368,8 +368,20 @@ function Click.Update(plate, unit, show, size)
 		if not ok or not button then return end
 		b = button
 		b:RegisterForClicks("AnyUp", "AnyDown")
+		b:SetAttribute("type", "target")
 		b:SetAttribute("type1", "target")
 		b:SetAttribute("type2", "target")
+		-- /ci debug turns a trace on: what each click did.
+		b:HookScript("OnClick", function(self, mouse, down)
+			if not Click.trace then return end
+			local unit = self:GetAttribute("unit")
+			print(string.format("|cffffd200CI click|r %s down=%s unit=%s type=%s exists=%s", tostring(mouse), tostring(down),
+				tostring(unit), tostring(self:GetAttribute("type")), tostring(unit and UnitExists(unit))))
+			C_Timer.After(0.2, function()
+				print(string.format("|cffffd200CI click|r target now: %s (same unit: %s)", tostring(UnitName("target")),
+					tostring(unit and UnitIsUnit("target", unit))))
+			end)
+		end)
 		plate.cciClick = b
 	end
 	if show then
@@ -1052,6 +1064,9 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 		end
 		print(string.format("  plates %d, click buttons %d (visible %d), clickTarget=%s, combat=%s",
 			#(C_NamePlate.GetNamePlates() or {}), made, shown, tostring(db.clickTarget), tostring(InCombatLockdown())))
+		local keyDown = C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("ActionButtonUseKeyDown")
+		Click.trace = true
+		print("  ActionButtonUseKeyDown=" .. tostring(keyDown) .. " - click trace ON: now click an icon")
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
