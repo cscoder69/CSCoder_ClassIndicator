@@ -1,0 +1,4 @@
+package-as: CSCoder_ClassIndicator
+ignore:
+  - tools
+  - CLAUDE.md

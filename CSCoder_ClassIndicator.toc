@@ -1,0 +1,8 @@
+## Interface: 16001, 11509, 120105
+## Title: CS.Coder - Class Indicator
+## Notes: The official class icon (and class name) above enemy players' nameplates. Works with the default UI and nameplate addons like Plater.
+## Author: CS.Coder
+## Version: @project-version@
+## SavedVariables: CSCoderClassIndicatorDB
+
+CSCoder_ClassIndicator.lua
