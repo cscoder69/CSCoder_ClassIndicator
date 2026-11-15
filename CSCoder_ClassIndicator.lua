@@ -832,6 +832,14 @@ function Score.Find(unit)
 	end
 	return Score.byName[name]
 end
+-- Ask the game for a fresh scoreboard now (an unknown player just showed up), at most once a
+-- second; UPDATE_BATTLEFIELD_SCORE then draws the indicators that were waiting.
+function Score.Request()
+	local now = GetTime()
+	if Score.asked and now - Score.asked < 1 then return end
+	Score.asked = now
+	if RequestBattlefieldScoreData then pcall(RequestBattlefieldScoreData) end
+end
 function Score.MyFaction()
 	local faction = UnitFactionGroup("player")
 	return faction == "Horde" and 0 or faction == "Alliance" and 1 or nil
@@ -852,7 +860,7 @@ local function UnitWanted(unit)
 	if isPlayer == nil or enemy == nil then
 		-- Hidden by the game: the scoreboard says if it is a player and on which side.
 		local entry = Score.Find(unit)
-		if not entry then return false end
+		if not entry then Score.Request(); return false end
 		if entry.faction and Score.MyFaction() then return entry.faction ~= Score.MyFaction() or db.friends end
 		return true
 	end
@@ -882,7 +890,7 @@ local function UpdateUnit(unit)
 		else
 			-- Hidden by the game (battlegrounds): the class from the scoreboard.
 			local entry = Score.Find(unit)
-			if not entry then HidePlate(plate) return end
+			if not entry then Score.Request(); HidePlate(plate) return end
 			class, name = entry.class, ClassName(entry.class)
 		end
 	end

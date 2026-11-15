@@ -67,6 +67,7 @@ env.Settings = {
 }
 env.HideUIPanel = function() end
 env.GetLocale = function() return "ptBR" end
+env.GetTime = function() return os.clock() end
 env.IsShiftKeyDown = function() return false end
 env.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 env.GetPhysicalScreenSize = function() return 2560, 1440 end
