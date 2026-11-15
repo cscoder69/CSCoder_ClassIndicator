@@ -3,6 +3,12 @@
 The official class icon and the class name above every enemy player's nameplate, so you know at a glance
 whether it's a Hunter, a Mage or a Warrior, without relying on colors.
 
+## Why
+
+I made it because colors don't work well for me: in PvP, with nameplates on, I couldn't reliably tell allies from enemies,
+or one class from another. The goal is simple: the official class icon (and the class name, if you want it) above
+every enemy player, so you know who's who at a glance. Feedback and ideas are very welcome.
+
 Made for **WoW Forever**. Works with the default nameplates and with nameplate addons such as Plater.
 
 ![Every class at a glance](docs/screenshot_test.png)
@@ -29,7 +35,7 @@ Made for **WoW Forever**. Works with the default nameplates and with nameplate a
 ## Notes
 
 - Inside dungeons, raids and battlegrounds the game may lock nameplates for every addon.
-- AI Disclaimer: the code was written with the help of Claude (Anthropic).
+- AI Disclaimer: the code was written with the help of Claude (Anthropic), under my direction and tested in game by me; the logo was made with ChatGPT.
 
 ## License
 
