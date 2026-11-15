@@ -139,3 +139,8 @@ name "First Surname", faction (return 6) and the class token. So `Score` maps na
 refreshed on UPDATE_BATTLEFIELD_SCORE, requested every 5 s in pvp/arena. `Ask()` reads unit
 tests safely (secret/error -> nil). Test mode shows SAMPLE classes (not the real ones).
 `/ci why` prints what the game tells about the target.
+- Install modes (2026-11-15): tools/mode-release.bat installs the latest GitHub release into the
+  game (plain copy); tools/mode-dev.bat puts the junction back (edits live). On this PC the game
+  now runs the RELEASE copies of Class Indicator and Quest Indicator; Flat Bags and Bag Locker
+  junctions were removed from AddOns (their source folders are kept). Run mode-dev.bat before
+  developing again.
