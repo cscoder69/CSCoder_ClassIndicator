@@ -298,3 +298,19 @@ for _, f in ipairs(frames) do
 	if f._scripts.OnUpdate then try("OnUpdate", f._scripts.OnUpdate, f, 0.016); updates = updates + 1 end
 end
 print("OnUpdate scripts run", updates, "errors after lock:", errors)
+
+-- Battleground: the class is secret, the scoreboard has it under "First Surname".
+env.issecretvalue = function(v) return v == "SECRET" end
+env.UnitClass = function(u) if u == "nameplate1" then return "SECRET", "SECRET" end return "Hunter", "HUNTER" end
+env.UnitName = function(u) if u == "nameplate1" then return "Mr", "Brigg" end return "Tester" end
+env.UnitIsPlayer = function() return true end
+env.UnitCanAttack = function(_, u) return u == "nameplate1" end
+env.UnitIsEnemy = env.UnitCanAttack
+env.UnitFactionGroup = function() return "Alliance" end
+env.GetNumBattlefieldScores = function() return 1 end
+env.GetBattlefieldScore = function() return "Mr Brigg", "SECRET", "SECRET", "SECRET", "SECRET", 0, "Troll", "Mago", "MAGE" end
+Fire("UPDATE_BATTLEFIELD_SCORE")
+Fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+local bgInd = plates.nameplate1.cciIndicator
+print("battleground: enemy with secret class shown from the scoreboard", bgInd ~= nil and bgInd._shown, bgInd and bgInd.text._text)
+print("errors after battleground:", errors)

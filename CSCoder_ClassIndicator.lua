@@ -822,8 +822,14 @@ function Score.Refresh()
 end
 -- The class token for a unit, from the scoreboard (nil when unknown).
 function Score.Find(unit)
-	local ok, name = pcall(UnitName, unit)
+	local ok, name, second = pcall(UnitName, unit)
 	if not ok or type(name) ~= "string" or IsSecret(name) then return nil end
+	-- WoW Forever names have a surname: UnitName gives "Mr", "Brigg" while the scoreboard says
+	-- "Mr Brigg". (On other clients the second value is the realm: "Name-Realm".)
+	if type(second) == "string" and second ~= "" and not IsSecret(second) then
+		local entry = Score.byName[name .. " " .. second] or Score.byName[name .. "-" .. second]
+		if entry then return entry end
+	end
 	return Score.byName[name]
 end
 function Score.MyFaction()

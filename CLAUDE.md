@@ -130,3 +130,12 @@ check job (syntax, mock, translations) then BigWigs packager on a v* tag. CurseF
 (created by the user 2026-11-14, v1.0.0 uploaded by hand: tags start at v1.0.1). Earlier note:
 when created, add "## X-Curse-Project-ID" to the .toc and the CF_API_KEY secret. Dev auto test mode
 and the /ci lock diagnostics were removed before the first push.
+
+## Battlegrounds (2026-11-15, from /ci why in a real BG)
+WoW Forever in a BG: UnitIsPlayer / UnitCanAttack / UnitIsEnemy readable; UnitClass,
+UnitClassBase and UnitGUID are SECRET; UnitName gives "First", "Surname" (Forever names have a
+surname; elsewhere the 2nd value is the realm). The scoreboard (GetBattlefieldScore) has the full
+name "First Surname", faction (return 6) and the class token. So `Score` maps names -> class,
+refreshed on UPDATE_BATTLEFIELD_SCORE, requested every 5 s in pvp/arena. `Ask()` reads unit
+tests safely (secret/error -> nil). Test mode shows SAMPLE classes (not the real ones).
+`/ci why` prints what the game tells about the target.
