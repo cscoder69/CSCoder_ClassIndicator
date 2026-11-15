@@ -66,6 +66,11 @@ local DEFAULTS = {
 }
 local SETTINGS_VERSION = 2
 
+-- Dev copy only: settings forced on every load (to try a configuration with just a /reload).
+-- Empty in releases (the packaged copy never applies it anyway).
+local DEV_OVERRIDES = {
+}
+
 local db
 local function CopyValue(value)
 	if type(value) ~= "table" then return value end
@@ -225,7 +230,6 @@ local Indicator = { version = 1 } -- version goes up when options change (indica
 -- with the nameplate changing size all the time it switched resolution and the art shimmered.)
 local function SetTex(t, path, wrap)
 	t:SetTexture(path, wrap, wrap)
-end
 end
 
 -- Shapes (textures made by tools/make_shapes.lua): the icon's mask, the "hole" that cuts the
@@ -1654,6 +1658,14 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		if arg1 ~= ADDON then return end
 		self:UnregisterEvent("ADDON_LOADED")
 		LoadSettings()
+		-- Dev copy (the source folder, version not filled by the packager): test mode on from the
+		-- start and DEV_OVERRIDES applied, so a /reload is enough to try a configuration.
+		local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version")
+		if not version or version:find("@") then
+			for key, value in pairs(DEV_OVERRIDES) do db[key] = value end
+			testMode = true
+			print("|cffffd200" .. TITLE .. "|r: dev build, test mode ON" .. (next(DEV_OVERRIDES) and " + dev settings" or ""))
+		end
 		pcall(BuildLanding)
 		if CSCoderMinimap then
 			CSCoderMinimap.Register({
