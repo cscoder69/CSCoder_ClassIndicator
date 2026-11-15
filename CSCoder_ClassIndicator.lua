@@ -1947,6 +1947,34 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 	msg = string.lower(msg or "")
 	if msg == "test" then
 		SetTestMode(not testMode)
+	elseif msg == "why" then
+		-- What the game tells this addon about your target (some values are hidden in instances).
+		local unit = "target"
+		local function Show(label, fn, ...)
+			local results = { pcall(fn, ...) }
+			local parts = {}
+			if not results[1] then
+				parts[1] = "ERROR " .. tostring(results[2])
+			else
+				for i = 2, #results do parts[#parts + 1] = IsSecret(results[i]) and "<secret>" or tostring(results[i]) end
+				if #results == 1 then parts[1] = "nil" end
+			end
+			print("  " .. label .. ": " .. table.concat(parts, ", "))
+		end
+		print("|cffffd200" .. TITLE .. "|r why (target):")
+		Show("IsInInstance", IsInInstance)
+		Show("UnitExists", UnitExists, unit)
+		Show("UnitIsPlayer", UnitIsPlayer, unit)
+		Show("UnitCanAttack", UnitCanAttack, "player", unit)
+		Show("UnitIsEnemy", UnitIsEnemy, "player", unit)
+		Show("UnitClass", UnitClass, unit)
+		if UnitClassBase then Show("UnitClassBase", UnitClassBase, unit) end
+		Show("UnitGUID", UnitGUID, unit)
+		Show("UnitName", UnitName, unit)
+		Show("nameplate", function() local p = C_NamePlate.GetNamePlateForUnit(unit); return p ~= nil, p and p.IsForbidden and p:IsForbidden() end)
+		Show("concat secret", function() local _, c = UnitClass(unit); return "x" .. c end)
+		if GetNumBattlefieldScores then Show("scores", GetNumBattlefieldScores) end
+		if GetBattlefieldScore then Show("score 1", GetBattlefieldScore, 1) end
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and T("on") or T("off")))
