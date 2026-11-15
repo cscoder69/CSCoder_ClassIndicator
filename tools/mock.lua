@@ -10,7 +10,7 @@ end
 
 -- Catch-all widget: unknown methods do nothing; Create*/Get* of objects return new widgets.
 local Widget = {}
-local NUMBERS = { GetFrameLevel = 1, GetStringWidth = 50, GetValue = 0, GetWidth = 100, GetHeight = 20, GetAlpha = 1 }
+local NUMBERS = { GetEffectiveScale = 0.64, GetFrameLevel = 1, GetStringWidth = 50, GetValue = 0, GetWidth = 100, GetHeight = 20, GetAlpha = 1 }
 local function NewWidget(kind)
 	local w = { _kind = kind, _scripts = {}, _shown = true, _points = 0 }
 	return setmetatable(w, Widget)
@@ -65,6 +65,7 @@ env.Settings = {
 	RegisterCanvasLayoutSubcategory = function() return {} end,
 }
 env.HideUIPanel = function() end
+env.GetPhysicalScreenSize = function() return 2560, 1440 end
 env.StaticPopupDialogs = {}
 env.StaticPopup_Show = function(name, a, b, data) env._popup = { name = name, data = data } end
 env.OKAY, env.CANCEL, env.YES, env.NO = "OK", "Cancel", "Yes", "No"

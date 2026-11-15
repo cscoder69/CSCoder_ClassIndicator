@@ -225,6 +225,16 @@ local Indicator = { version = 1 } -- version goes up when options change (indica
 
 -- Our textures are drawn smaller than their 128 px files: trilinear filtering (mipmaps) keeps
 -- their edges smooth instead of jagged.
+-- Pixel-perfect scale: one unit = a whole number of screen pixels (closest to the UI's size).
+-- With every piece at whole-unit offsets the indicator moves pixel by pixel as ONE piece: no
+-- shimmering art or text sliding against its ribbon while the nameplate moves.
+function Indicator.PixelScale()
+	local _, height = GetPhysicalScreenSize()
+	if not height or height <= 0 then return UIParent:GetEffectiveScale() end
+	local pixel = 768 / height
+	return pixel * math.max(1, math.floor(UIParent:GetEffectiveScale() / pixel + 0.5))
+end
+
 local function SetTex(t, path, wrap)
 	if not pcall(t.SetTexture, t, path, wrap, wrap, "TRILINEAR") then t:SetTexture(path, wrap, wrap) end
 end
@@ -327,18 +337,6 @@ function Indicator.New(parent)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
-	-- Smooth movement: nameplates move by fractions of a pixel. When each piece rounds its own
-	-- position (the default), the text slid 1 px against its ribbon from frame to frame. With
-	-- snapping off for EVERY piece (text included) they all move together as one.
-	local function NoSnap(region)
-		if region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, false) end
-		if region.SetTexelSnappingBias then pcall(region.SetTexelSnappingBias, region, 0) end
-	end
-	for _, region in ipairs({ f.icon, f.ring, f.shadow, f.glow, f.shade, f.borderGlow, f.text, bg.fill, bg.tip }) do NoSnap(region) end
-	for _, e in ipairs(f.edges) do NoSnap(e) end
-	for _, e in ipairs(bg.edges) do NoSnap(e) end
-	for _, piece in pairs(badge.pieces) do NoSnap(piece) end
-	for _, part in ipairs(healer.parts) do NoSnap(part) end
 	f:Hide()
 	return f
 end
@@ -463,7 +461,7 @@ function Indicator.Style(f, class, name, isTarget)
 		local inX = pos:find("left") and 1 or -1
 		local inY = pos:find("top") and -1 or 1
 		if pos == "center" then healer:SetPoint("CENTER", f, "CENTER", db.healerX, db.healerY)
-		else healer:SetPoint("CENTER", f, string.upper(pos), inX * s * 0.2 + db.healerX, inY * s * 0.2 + db.healerY) end
+		else healer:SetPoint("CENTER", f, string.upper(pos), math.floor(inX * s * 0.2 + 0.5) + db.healerX, math.floor(inY * s * 0.2 + 0.5) + db.healerY) end
 		local p = healer.parts
 		p[1]:SetSize(s + 4, bar + 4); p[2]:SetSize(bar + 4, s + 4)
 		p[3]:SetSize(s, bar); p[4]:SetSize(bar, s)
@@ -671,11 +669,11 @@ local function UpdateUnit(unit)
 		plate.cciIndicator = f
 	end
 	-- Fixed scale: nameplates grow and shrink with distance; following that, the text was
-	-- redrawn at a new fractional size every frame and shimmered. The indicator keeps the UI's
-	-- scale instead (same size as the rest of the interface).
+	-- redrawn at a new fractional size every frame and shimmered. The indicator keeps a
+	-- pixel-perfect scale instead (Indicator.PixelScale).
 	if f.SetIgnoreParentScale then
 		f:SetIgnoreParentScale(db.fixedScale)
-		f:SetScale(db.fixedScale and UIParent:GetEffectiveScale() or 1)
+		f:SetScale(db.fixedScale and Indicator.PixelScale() or 1)
 	end
 	-- Redraw only when something changed (class, target, options, the bar it sits on): the game
 	-- sends unit events all the time, and restyling on each one made the name flicker.
