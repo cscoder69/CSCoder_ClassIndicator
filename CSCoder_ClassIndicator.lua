@@ -67,11 +67,6 @@ local DEFAULTS = {
 }
 local SETTINGS_VERSION = 2
 
--- Dev copy only: settings forced on every load (to try a configuration with just a /reload).
--- Empty in releases (the packaged copy never applies it anyway).
-local DEV_OVERRIDES = {
-}
-
 local db
 local function CopyValue(value)
 	if type(value) ~= "table" then return value end
@@ -751,7 +746,6 @@ function Lock.Attach(f, target)
 	if Lock.Apply(f) then
 		Lock.frames[f] = true
 		Indicator.SetSnapping(f, true)
-		if Lock.verbose and not Lock.said then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock ON") end
 	else
 		-- Can't be measured (the game restricts nameplates): every piece rounds the SAME way
 		-- instead. A pixel-perfect scale (1 unit = whole screen pixels), whole-pixel offsets
@@ -765,7 +759,6 @@ function Lock.Attach(f, target)
 		end
 		Indicator.Place(f, target)
 		Indicator.SetSnapping(f, true)
-		if Lock.verbose and not Lock.said then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock NOT possible here (the bar can't be measured)") end
 	end
 end
 function Lock.Detach(f) Lock.frames[f] = nil end
@@ -1911,15 +1904,6 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		self:UnregisterEvent("ADDON_LOADED")
 		LoadSettings()
 		Translations.Load()
-		-- Dev copy (the source folder, version not filled by the packager): test mode on from the
-		-- start and DEV_OVERRIDES applied, so a /reload is enough to try a configuration.
-		local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version")
-		if not version or version:find("@") then
-			for key, value in pairs(DEV_OVERRIDES) do db[key] = value end
-			testMode = true
-			Lock.verbose = true
-			print("|cffffd200" .. TITLE .. "|r: dev build, test mode ON" .. (next(DEV_OVERRIDES) and " + dev settings" or ""))
-		end
 		pcall(BuildLanding)
 		if CSCoderMinimap then
 			CSCoderMinimap.Register({
@@ -1963,24 +1947,6 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 	msg = string.lower(msg or "")
 	if msg == "test" then
 		SetTestMode(not testMode)
-	elseif msg == "lock" then
-		local locked, plain = 0, 0
-		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
-			local f = plate.cciIndicator
-			if f and f:IsShown() then if Lock.frames[f] then locked = locked + 1 else plain = plain + 1 end end
-		end
-		print(string.format("|cffffd200%s|r: pixel lock on %d indicator(s), plain anchoring on %d", TITLE, locked, plain))
-		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
-			local f = plate.cciIndicator
-			if f and f.lockTarget then
-				local ok, a, b, c, d = pcall(f.lockTarget.GetRect, f.lockTarget)
-				print("  bar GetRect: ok=" .. tostring(ok) .. " -> " .. tostring(a) .. ", " .. tostring(b) .. ", " .. tostring(c) .. ", " .. tostring(d))
-				local okP, pa = pcall(plate.GetRect, plate)
-				print("  plate GetRect: ok=" .. tostring(okP) .. " -> " .. tostring(pa))
-				print("  text can turn snapping off: " .. tostring(f.text.SetSnapToPixelGrid ~= nil) .. ", texture: " .. tostring(f.icon.SetSnapToPixelGrid ~= nil))
-				break
-			end
-		end
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and T("on") or T("off")))

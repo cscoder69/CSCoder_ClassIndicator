@@ -34,7 +34,7 @@ default UI and the popular nameplate addons (Plater first).
 mock doesn't have (CLASS_ICON_TCOORDS, RAID_CLASS_COLORS...).
 
 ## State
-v0 written 2026-11-14, waiting for the user's first in-game test. English only (translate after
+Ready for the first release (v1.0.0 not tagged yet).
 the layout is approved). Junction already in AddOns. Local git only (ask before GitHub/CurseForge).
 
 ## User notes (2026-11-14, after the first test)
@@ -123,3 +123,9 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   game). A language change rebuilds the window (`RebuildWindow`). Check: `luajit
   tools/check_translations.lua .` (missing / unused / placeholders, exit 1 on problems).
 - Toc order: CSCoderMinimap.lua, Locales.lua, CSCoder_ClassIndicator.lua. The mock runs in ptBR.
+
+## Repository (2026-11-14)
+GitHub cscoder69/CSCoder_ClassIndicator (public, MIT), branch main. Workflow like Quest Indicator:
+check job (syntax, mock, translations) then BigWigs packager on a v* tag. No CurseForge project yet:
+when created, add "## X-Curse-Project-ID" to the .toc and the CF_API_KEY secret. Dev auto test mode
+and the /ci lock diagnostics were removed before the first push.

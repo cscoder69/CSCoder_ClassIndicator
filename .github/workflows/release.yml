@@ -1,0 +1,55 @@
+# Push a version tag (e.g. v1.0.0) to build the addon zip and upload it to CurseForge and
+# GitHub Releases. Needs the repository secret CF_API_KEY (CurseForge API token) and the
+# "## X-Curse-Project-ID" line in the .toc (without it only GitHub Releases gets the zip).
+# The "check" job runs first: syntax, the mocked WoW run and the translations. If any of it
+# fails, nothing is uploaded.
+name: Package and release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Run by hand (Actions tab or "gh workflow run") to try the checks; only a tag uploads.
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install LuaJIT (Lua 5.1, like WoW)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq luajit
+
+      - name: Syntax
+        run: |
+          for f in CSCoderMinimap.lua Locales.lua CSCoder_ClassIndicator.lua; do
+            luajit -e "assert(loadfile('$f'))" && echo "$f OK"
+          done
+
+      - name: Mocked WoW run
+        run: |
+          luajit tools/mock.lua . | tee mock.log
+          grep -q "errors after lock:	0" mock.log
+
+      - name: Translations
+        run: luajit tools/check_translations.lua .
+
+  release:
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Upload only for WoW Forever (Interface 16001 = 1.60.x), the client it is tested on.
+      - uses: BigWigsMods/packager@v2
+        with:
+          args: -g forever
