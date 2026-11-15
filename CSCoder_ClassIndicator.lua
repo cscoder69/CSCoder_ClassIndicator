@@ -791,11 +791,67 @@ local function PlateTarget(plate)
 	return plate
 end
 
+-- Battleground scoreboard: inside instances the game can hide a unit's class (a "secret"
+-- value); the scoreboard still lists every player's name, faction and class. Name -> entry.
+local Score = { byName = {} }
+local CLASS_TOKENS = {}
+for class in pairs(OWN_COORDS) do CLASS_TOKENS[class] = true end
+function Score.Refresh()
+	if not (GetNumBattlefieldScores and GetBattlefieldScore) then return end
+	wipe(Score.byName)
+	for i = 1, GetNumBattlefieldScores() do
+		local results = { pcall(GetBattlefieldScore, i) }
+		local name = results[2]
+		if results[1] and type(name) == "string" and not IsSecret(name) then
+			local entry = {}
+			-- The return order differs between clients: take the faction (0 Horde, 1 Alliance)
+			-- and the class token wherever they are.
+			for j = 3, #results do
+				local v = results[j]
+				if not IsSecret(v) then
+					if j == 7 and (v == 0 or v == 1) then entry.faction = v end
+					if type(v) == "string" and CLASS_TOKENS[v] then entry.class = v end
+				end
+			end
+			if entry.class then
+				Score.byName[name] = entry
+				Score.byName[string.match(name, "^[^%-]+") or name] = entry -- without the realm
+			end
+		end
+	end
+end
+-- The class token for a unit, from the scoreboard (nil when unknown).
+function Score.Find(unit)
+	local ok, name = pcall(UnitName, unit)
+	if not ok or type(name) ~= "string" or IsSecret(name) then return nil end
+	return Score.byName[name]
+end
+function Score.MyFaction()
+	local faction = UnitFactionGroup("player")
+	return faction == "Horde" and 0 or faction == "Alliance" and 1 or nil
+end
+
+-- A unit test that can't be read (secret, or an error) gives nil instead of breaking.
+local function Ask(fn, ...)
+	local ok, value = pcall(fn, ...)
+	if not ok or IsSecret(value) then return nil end
+	return value
+end
+
 local function UnitWanted(unit)
 	if testMode then return not UnitIsUnit(unit, "player") end
-	if not UnitIsPlayer(unit) or UnitIsUnit(unit, "player") then return false end
-	if UnitCanAttack("player", unit) or UnitIsEnemy("player", unit) then return true end
-	return db.friends
+	if Ask(UnitIsUnit, unit, "player") then return false end
+	local isPlayer = Ask(UnitIsPlayer, unit)
+	local enemy = Ask(UnitCanAttack, "player", unit) or Ask(UnitIsEnemy, "player", unit)
+	if isPlayer == nil or enemy == nil then
+		-- Hidden by the game: the scoreboard says if it is a player and on which side.
+		local entry = Score.Find(unit)
+		if not entry then return false end
+		if entry.faction and Score.MyFaction() then return entry.faction ~= Score.MyFaction() or db.friends end
+		return true
+	end
+	if not isPlayer then return false end
+	return enemy or db.friends
 end
 
 local function HidePlate(plate)
@@ -814,8 +870,15 @@ local function UpdateUnit(unit)
 		class = SAMPLE_CLASSES[(index - 1) % #SAMPLE_CLASSES + 1]
 		name = ClassName(class)
 	else
-		name, class = UnitClass(unit)
-		if IsSecret(class) or IsSecret(name) or not class then HidePlate(plate) return end
+		local ok, n, c = pcall(UnitClass, unit)
+		if ok and c and not IsSecret(c) and not IsSecret(n) then
+			name, class = n, c
+		else
+			-- Hidden by the game (battlegrounds): the class from the scoreboard.
+			local entry = Score.Find(unit)
+			if not entry then HidePlate(plate) return end
+			class, name = entry.class, ClassName(entry.class)
+		end
 	end
 
 	local f = plate.cciIndicator
@@ -1923,9 +1986,20 @@ events:SetScript("OnEvent", function(self, event, arg1)
 			})
 		end
 		for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED", "UI_SCALE_CHANGED" }) do
+			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED", "UI_SCALE_CHANGED", "UPDATE_BATTLEFIELD_SCORE" }) do
 			pcall(self.RegisterEvent, self, e)
 		end
+		-- In a battleground or arena, ask the game for the scoreboard every few seconds (it is
+		-- where the hidden classes are read from; UPDATE_BATTLEFIELD_SCORE answers).
+		if C_Timer.NewTicker then
+			C_Timer.NewTicker(5, function()
+				local _, kind = IsInInstance()
+				if (kind == "pvp" or kind == "arena") and RequestBattlefieldScoreData then RequestBattlefieldScoreData() end
+			end)
+		end
+	elseif event == "UPDATE_BATTLEFIELD_SCORE" then
+		Score.Refresh()
+		RefreshAll() -- (no full redraw: only plates not shown yet get drawn)
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		Indicator.version = Indicator.version + 1 -- a full redraw when entering the world
 		C_Timer.After(0.1, function() RefreshAll() end)
