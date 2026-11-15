@@ -655,8 +655,16 @@ function Lock.Spot(f)
 	elseif side == "right" then point, ax, ay = "LEFT", (left + width) * s + (x + y) * fs, (bottom + height / 2) * s
 	else point, ax, ay = "BOTTOM", (left + width / 2) * s + x * fs, (bottom + height) * s + y * fs end
 	local px = PixelSize()
-	ax = math.floor(ax / px + 0.5) * px
-	ay = math.floor(ay / px + 0.5) * px
+	-- Hysteresis: a unit standing still still bobs a little, and right between two pixels plain
+	-- rounding flipped the indicator 1 px back and forth. It moves to a new pixel only once the
+	-- bar has moved most of a pixel away from where the indicator sits.
+	local function Snap(value, current)
+		if current and math.abs(value - current) < px * 0.8 then return current end
+		return math.floor(value / px + 0.5) * px
+	end
+	ax = Snap(ax, f.lockAX)
+	ay = Snap(ay, f.lockAY)
+	f.lockAX, f.lockAY = ax, ay
 	return point, ax / fs, ay / fs
 end
 function Lock.Apply(f)
@@ -672,7 +680,7 @@ end
 -- Hang the indicator on its bar: locked to whole pixels when possible.
 function Lock.Attach(f, target)
 	f.lockTarget = target
-	f.lockPoint = nil
+	f.lockPoint, f.lockAX, f.lockAY = nil, nil, nil
 	if Lock.Apply(f) then
 		Lock.frames[f] = true
 		Indicator.SetSnapping(f, true)
