@@ -272,3 +272,15 @@ try("menu row", lib.menu.rows[1]._scripts.OnClick, lib.menu.rows[1], "LeftButton
 print("minimap: menu row opens that addon", opened == 1)
 try("minimap tooltip", lib.button._scripts.OnEnter, lib.button)
 print("errors after minimap:", errors)
+
+-- Visual pickers: every "Pick..." button opens the picker; clicking a tile applies it.
+try("open options again", env.SlashCmdList.CSCODERCLASSINDICATOR, "")
+local picks = 0
+for _, f in ipairs(frames) do
+	if f.label and f.label._text == "Pick..." and f._scripts.OnClick then
+		try("pick open", f._scripts.OnClick, f); picks = picks + 1
+		local p = env.CSCoder_ClassIndicatorPicker
+		if p and p.tiles and p.tiles[2] then try("pick tile", p.tiles[2]._scripts.OnClick, p.tiles[2]) end
+	end
+end
+print("pick buttons", picks, "errors after pickers:", errors)

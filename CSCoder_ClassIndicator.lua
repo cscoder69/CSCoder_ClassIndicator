@@ -34,6 +34,7 @@ local DEFAULTS = {
 	borderSize = 2,
 	borderStyle = "flat",  -- flat | metal (a shine tinted with the border colour)
 	iconShadow = false,    -- soft dark shadow under the icon
+	spellIcons = false,    -- the spellbook class icons (richer art) instead of the character-creation ones
 	textBg = "none",       -- name background: none | badge (pointed, coloured edge) | plate | ribbon
 	textBgMode = "gold",   -- badge/plate edge, ribbon colour: gold | class | enemy | dark | custom
 	textFont = "default",  -- key in FONTS
@@ -185,6 +186,21 @@ local SAMPLE_CLASSES = { "WARRIOR", "HUNTER", "MAGE", "ROGUE", "PRIEST", "WARLOC
 local function ClassCoords(class)
 	local coords = (CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class]) or OWN_COORDS[class]
 	return coords
+end
+-- The icon art: the character-creation sheet (frame cut off) or the spellbook class icon
+-- (Interface\Icons\ClassIcon_<Class>, its built-in edge cut off).
+local SPELL_ICON_NAMES = {
+	WARRIOR = "Warrior", MAGE = "Mage", ROGUE = "Rogue", DRUID = "Druid", HUNTER = "Hunter", SHAMAN = "Shaman",
+	PRIEST = "Priest", WARLOCK = "Warlock", PALADIN = "Paladin", DEATHKNIGHT = "DeathKnight", MONK = "Monk",
+	DEMONHUNTER = "DemonHunter", EVOKER = "Evoker",
+}
+local function ClassArt(class)
+	if db and db.spellIcons and SPELL_ICON_NAMES[class] then
+		return "Interface\\Icons\\ClassIcon_" .. SPELL_ICON_NAMES[class], 0.08, 0.92, 0.08, 0.92
+	end
+	local c = ClassCoords(class) or { 0, 1, 0, 1 }
+	local cutX, cutY = (c[2] - c[1]) * 0.07, (c[4] - c[3]) * 0.07
+	return CLASS_TEXTURE, c[1] + cutX, c[2] - cutX, c[3] + cutY, c[4] - cutY
 end
 local function ClassColor(class)
 	local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
@@ -339,15 +355,14 @@ function Indicator.Style(f, class, name, isTarget)
 	f.icon:SetPoint("TOPLEFT", border, -border)
 	f.icon:SetPoint("BOTTOMRIGHT", -border, border)
 
-	local l, r, t, b = coords[1], coords[2], coords[3], coords[4]
 	if shape == "round" and not f.canMask then
+		local l, r, t, b = coords[1], coords[2], coords[3], coords[4]
 		f.icon:SetTexture(CLASS_CIRCLES)
 		f.icon:SetTexCoord(l, r, t, b)
 	else
-		-- Cut the thin frame of the character-creation icon off.
-		local cutX, cutY = (r - l) * 0.07, (b - t) * 0.07
-		f.icon:SetTexture(CLASS_TEXTURE)
-		f.icon:SetTexCoord(l + cutX, r - cutX, t + cutY, b - cutY)
+		local texture, l, r, t, b = ClassArt(class)
+		f.icon:SetTexture(texture)
+		f.icon:SetTexCoord(l, r, t, b)
 	end
 	if f.canMask then
 		f.iconMask:SetTexture(info.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
@@ -955,10 +970,13 @@ do
 			b:SetPoint("TOPLEFT", x + (i - 1) * 32, y - 16)
 			local icon = b:CreateTexture(nil, "ARTWORK")
 			icon:SetPoint("TOPLEFT", 2, -2); icon:SetPoint("BOTTOMRIGHT", -2, 2)
-			local c = ClassCoords(class)
-			local cx, cy = (c[2] - c[1]) * 0.07, (c[4] - c[3]) * 0.07
-			icon:SetTexture(CLASS_TEXTURE)
-			icon:SetTexCoord(c[1] + cx, c[2] - cx, c[3] + cy, c[4] - cy)
+			local function Art()
+				local texture, l, r, t, b = ClassArt(class)
+				icon:SetTexture(texture)
+				icon:SetTexCoord(l, r, t, b)
+			end
+			Art()
+			refreshers[#refreshers + 1] = Art
 			local edge = CreateFrame("Frame", nil, b)
 			edge:SetAllPoints()
 			Edges(edge, GOLD[1], GOLD[2], GOLD[3], 1)
@@ -1192,6 +1210,99 @@ do
 		tab:HookScript("OnShow", Sync)
 	end
 
+	-- Visual picker (like Quest Indicator's icon window): every choice drawn for real with the
+	-- current settings, click one to use it.
+	-- choices = { { value, label, overrides }, ... }: overrides = the settings that choice sets
+	-- (drawn in the tile); isCurrent(choice) says which tile is selected; apply(choice) uses it.
+	local picker
+	local function OpenPicker(title, choices, isCurrent, apply)
+		if not picker then
+			local p = CreateFrame("Frame", "CSCoder_ClassIndicatorPicker", window)
+			p:SetFrameStrata("FULLSCREEN_DIALOG")
+			p:EnableMouse(true)
+			p:SetMovable(true)
+			p:RegisterForDrag("LeftButton")
+			p:SetScript("OnDragStart", p.StartMoving)
+			p:SetScript("OnDragStop", p.StopMovingOrSizing)
+			Fill(p, 0.08, 0.07, 0.05, 0.98)
+			Edges(p, GOLD[1], GOLD[2], GOLD[3], 0.8)
+			p.title = p:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+			p.title:SetPoint("TOPLEFT", 16, -14)
+			local close = Button(p, "x", 22)
+			close:SetPoint("TOPRIGHT", -10, -10)
+			close:SetScript("OnClick", function() p:Hide() end)
+			table.insert(UISpecialFrames, p:GetName())
+			p.tiles = {}
+			picker = p
+		end
+		local p = picker
+		local TILE_W, TILE_H, COLS, GAP = 240, 96, 3, 10
+		p.title:SetText(title)
+		local rows = math.ceil(#choices / COLS)
+		p:SetSize(COLS * TILE_W + (COLS + 1) * GAP, 52 + rows * (TILE_H + GAP))
+		p:ClearAllPoints()
+		p:SetPoint("CENTER", window, "CENTER")
+
+		local function Draw()
+			for i, choice in ipairs(choices) do
+				local tile = p.tiles[i]
+				if not tile then
+					tile = CreateFrame("Button", nil, p)
+					tile:SetSize(TILE_W, TILE_H)
+					tile.bg = Fill(tile, 0.05, 0.13, 0.15, 1)
+					local hl = tile:CreateTexture(nil, "HIGHLIGHT")
+					hl:SetAllPoints()
+					hl:SetColorTexture(1, 0.82, 0, 0.10)
+					tile.edge = CreateFrame("Frame", nil, tile)
+					tile.edge:SetAllPoints()
+					Edges(tile.edge, GOLD[1], GOLD[2], GOLD[3], 1)
+					tile.label = tile:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+					tile.label:SetPoint("BOTTOMLEFT", 8, 6)
+					tile.indicator = Indicator.New(tile)
+					tile.indicator:SetFrameLevel(tile:GetFrameLevel() + 3)
+					p.tiles[i] = tile
+				end
+				tile:ClearAllPoints()
+				tile:SetPoint("TOPLEFT", GAP + ((i - 1) % COLS) * (TILE_W + GAP), -44 - math.floor((i - 1) / COLS) * (TILE_H + GAP))
+				tile.label:SetText(choice[2])
+				tile.edge:SetShown(isCurrent(choice))
+				-- Draw with the choice's settings on top of the current ones, then put them back.
+				local saved = {}
+				for k, v in pairs(choice[3]) do saved[k] = db[k]; db[k] = v end
+				local savedShow = db.showText
+				db.showText = true
+				local f = tile.indicator
+				if Indicator.Style(f, "WARRIOR", ClassName("WARRIOR"), false) then
+					f:ClearAllPoints()
+					local pos = db.textPos
+					if pos == "right" then f:SetPoint("LEFT", tile, "LEFT", 24, 8)
+					elseif pos == "left" then f:SetPoint("RIGHT", tile, "RIGHT", -24, 8)
+					elseif pos == "above" then f:SetPoint("BOTTOM", tile, "BOTTOM", 0, 26)
+					else f:SetPoint("TOP", tile, "TOP", 0, -10) end
+					f:Show()
+				end
+				db.showText = savedShow
+				for k, v in pairs(saved) do db[k] = v end
+				tile:SetScript("OnClick", function()
+					apply(choice)
+					Changed()
+					Draw()
+				end)
+				tile:Show()
+			end
+			for i = #choices + 1, #p.tiles do p.tiles[i]:Hide() end
+		end
+		Draw()
+		p:Show()
+	end
+	-- A small "Pick..." button beside a control.
+	local function PickButton(parent, x, y, onClick)
+		local b = Button(parent, "Pick...", 64)
+		b:SetPoint("TOPLEFT", x, y)
+		b:SetScript("OnClick", onClick)
+		return b
+	end
+
 	local function Refresh()
 		for _, refresh in ipairs(refreshers) do refresh() end
 		if UpdatePreview then UpdatePreview() end
@@ -1285,6 +1396,10 @@ do
 				if q[1] == key then for k, v in pairs(q[3]) do db[k] = v end end
 			end
 		end }, quickOptions, 28, -52, "Sets the whole look in one click (shape, border, name background, font). Size, position and PvP options are kept.")
+		PickButton(settingsTab, 234, -68, function()
+			OpenPicker("Quick style", QUICK, function() return false end,
+				function(choice) for k, v in pairs(choice[3]) do db[k] = v end end)
+		end)
 
 		local page = CreateFrame("Frame", nil, settingsTab)
 		page:SetPoint("TOPLEFT", 0, -224)
@@ -1311,6 +1426,11 @@ do
 		y = y - 86
 		Heading(page, "Icon", COL1, y)
 		Gate(AddDropdown(page, "Shape", "shape", { { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" }, { "hex", "Hexagon" }, { "diamond", "Diamond" }, { "shield", "Shield" } }, COL1, y - 22).button, On)
+		Gate(PickButton(page, COL1 + 206, y - 38, function()
+			local choices = {}
+			for i, o in ipairs({ { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" }, { "hex", "Hexagon" }, { "diamond", "Diamond" }, { "shield", "Shield" } }) do choices[i] = { o[1], o[2], { shape = o[1] } } end
+			OpenPicker("Icon shape", choices, function(c) return db.shape == c[1] end, function(c) db.shape = c[1] end)
+		end), On)
 		Gate(AddSlider(page, "Size", "size", 12, 64, 1, COL1, y - 70).slider, On)
 		Gate(AddDropdown(page, "Position on the nameplate", "anchor", { { "top", "Top" }, { "bottom", "Bottom" },
 			{ "left", "Left" }, { "right", "Right" } }, COL1, y - 114,
@@ -1320,11 +1440,19 @@ do
 			"Distance from the health bar. Raise it to clear the name text.").slider, On)
 		Gate(AddSlider(page, "Opacity", "alpha", 0.2, 1, 0.05, COL1, y - 250).slider, On)
 		Gate(AddCheck(page, "Shadow under the icon", "iconShadow", COL1, y - 298), On)
+		Gate(AddCheck(page, "Spellbook icon art", "spellIcons", COL1 + 180, y - 298,
+			"Uses the class icons of the spellbook (richer art) instead of the character-creation ones."), On)
 
 		-- Name background (under the class name).
 		local function BgOn() return db.enabled and db.showText and db.textBg ~= "none" end
 		Heading(page, "Name background", COL1, y - 330)
-		Gate(AddDropdown(page, "Style", "textBg", { { "none", "None" }, { "badge", "Badge (pointed)" }, { "plate", "Dark plate" }, { "ribbon", "Ribbon" } }, COL1, y - 352,
+		local BG_STYLES = { { "none", "None" }, { "badge", "Badge (pointed)" }, { "plate", "Dark plate" }, { "ribbon", "Ribbon" } }
+		Gate(PickButton(page, COL1 + 206, y - 368, function()
+			local choices = {}
+			for i, o in ipairs(BG_STYLES) do choices[i] = { o[1], o[2], { textBg = o[1] } } end
+			OpenPicker("Name background", choices, function(c) return db.textBg == c[1] end, function(c) db.textBg = c[1] end)
+		end), function() return db.enabled and db.showText end)
+		Gate(AddDropdown(page, "Style", "textBg", BG_STYLES, COL1, y - 352,
 			"Badge: a dark plate with a colored edge and a pointed end, starting behind the icon. Plate: a simple dark box. Ribbon: a colored band with a notched end.").button,
 			function() return db.enabled and db.showText end)
 		Gate(AddDropdown(page, "Edge / ribbon color", "textBgMode", { { "gold", "Gold" }, { "class", "Class color" }, { "enemy", "Enemy red" },
