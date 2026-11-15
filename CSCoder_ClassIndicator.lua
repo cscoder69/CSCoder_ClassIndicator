@@ -684,12 +684,12 @@ function Lock.Attach(f, target)
 	if Lock.Apply(f) then
 		Lock.frames[f] = true
 		Indicator.SetSnapping(f, true)
-		if not Lock.said and testMode then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock ON") end
+		if Lock.verbose and not Lock.said then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock ON") end
 	else
 		Lock.frames[f] = nil
 		Indicator.Place(f, target)
 		Indicator.SetSnapping(f, false)
-		if not Lock.said and testMode then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock not possible here (bar can't be measured)") end
+		if Lock.verbose and not Lock.said then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock NOT possible here (the bar can't be measured)") end
 	end
 end
 function Lock.Detach(f) Lock.frames[f] = nil end
@@ -1757,6 +1757,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		if not version or version:find("@") then
 			for key, value in pairs(DEV_OVERRIDES) do db[key] = value end
 			testMode = true
+			Lock.verbose = true
 			print("|cffffd200" .. TITLE .. "|r: dev build, test mode ON" .. (next(DEV_OVERRIDES) and " + dev settings" or ""))
 		end
 		pcall(BuildLanding)
@@ -1801,6 +1802,13 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 	msg = string.lower(msg or "")
 	if msg == "test" then
 		SetTestMode(not testMode)
+	elseif msg == "lock" then
+		local locked, plain = 0, 0
+		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+			local f = plate.cciIndicator
+			if f and f:IsShown() then if Lock.frames[f] then locked = locked + 1 else plain = plain + 1 end end
+		end
+		print(string.format("|cffffd200%s|r: pixel lock on %d indicator(s), plain anchoring on %d", TITLE, locked, plain))
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
