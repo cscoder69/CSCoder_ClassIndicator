@@ -177,7 +177,7 @@ for _, shape in ipairs({ "round", "rounded", "square", "hex", "diamond", "shield
 		for _, pos in ipairs({ "below", "above", "left", "right" }) do
 			for _, anchor in ipairs({ "top", "bottom", "left", "right" }) do
 				db.shape, db.textPos, db.anchor = shape, pos, anchor
-				db.textBg = ({ "none", "plate", "ribbon" })[(#pos + #anchor) % 3 + 1]
+				db.textBg = ({ "none", "plate", "ribbon", "badge" })[(#pos + #anchor) % 4 + 1]
 				db.borderStyle, db.iconShadow = (#shape % 2 == 0) and "metal" or "flat", #pos % 2 == 0
 				db.border = border ~= "off"; if db.border then db.borderMode = border end
 				Fire("PLAYER_ENTERING_WORLD")

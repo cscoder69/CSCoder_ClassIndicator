@@ -33,8 +33,9 @@ local DEFAULTS = {
 	borderSize = 2,
 	borderStyle = "flat",  -- flat | metal (a shine tinted with the border colour)
 	iconShadow = false,    -- soft dark shadow under the icon
-	textBg = "none",       -- name background: none | plate (dark) | ribbon (coloured, notched end)
-	textBgMode = "class",  -- plate edge / ribbon colour: class | enemy | dark | custom
+	textBg = "none",       -- name background: none | badge (pointed, coloured edge) | plate | ribbon
+	textBgMode = "gold",   -- badge/plate edge, ribbon colour: gold | class | enemy | dark | custom
+	textFont = "default",  -- key in FONTS
 	textBgColor = { 0.6, 0.1, 0.1, 1 },
 	showText = true,
 	textPos = "below",     -- side of the icon: below | above | left | right
@@ -167,6 +168,14 @@ local SHORT_NAMES = {
 	PRIEST = "PRI", WARLOCK = "LCK", PALADIN = "PAL", DEATHKNIGHT = "DK", MONK = "MNK",
 	DEMONHUNTER = "DH", EVOKER = "EVO",
 }
+-- Fonts for the class name (the game's own files).
+local FONTS = {
+	default = STANDARD_TEXT_FONT,
+	serif = "Fonts\\MORPHEUS.TTF",
+	friz = "Fonts\\FRIZQT__.TTF",
+	narrow = "Fonts\\ARIALN.TTF",
+	skurri = "Fonts\\SKURRI.TTF",
+}
 -- Classes that can heal (no spec info needed: the class alone is the warning).
 local HEALER_CLASSES = { PRIEST = true, DRUID = true, PALADIN = true, SHAMAN = true, MONK = true, EVOKER = true }
 -- Preview and test mode: the nine classes of the classic game, in this order.
@@ -244,6 +253,18 @@ function Indicator.New(parent)
 	bg.edges = {}
 	for i = 1, 4 do bg.edges[i] = f.textHolder:CreateTexture(nil, "BORDER") end
 	f.textBg = bg
+	-- Badge: its own frame BELOW the indicator, so it starts behind the icon.
+	local badge = CreateFrame("Frame", nil, f)
+	badge:SetAllPoints()
+	badge.pieces = {}
+	for key, file in pairs({ midFill = "badge_mid_fill", midEdge = "badge_mid_edge", rFill = "badge_cap_fill",
+		rEdge = "badge_cap_edge", lFill = "badge_cap_fill", lEdge = "badge_cap_edge" }) do
+		local t = badge:CreateTexture(nil, key:find("Edge") and "BORDER" or "BACKGROUND")
+		t:SetTexture(MEDIA .. file)
+		badge.pieces[key] = t
+	end
+	badge:Hide()
+	f.badge = badge
 	-- Healer mark: a green cross with a dark outline at the icon's top-right corner.
 	local healer = CreateFrame("Frame", nil, f)
 	healer:SetFrameLevel(f:GetFrameLevel() + 6)
@@ -276,6 +297,7 @@ local function ModeColor(mode, custom, class)
 	if mode == "enemy" then return ENEMY_RED[1], ENEMY_RED[2], ENEMY_RED[3] end
 	if mode == "white" then return 1, 1, 1 end
 	if mode == "dark" then return 0.08, 0.07, 0.06 end
+	if mode == "gold" then return 1, 0.78, 0.25 end
 	return custom[1], custom[2], custom[3]
 end
 
@@ -386,12 +408,15 @@ function Indicator.Style(f, class, name, isTarget)
 	end
 
 	local text, bg = f.text, f.textBg
-	local plate, ribbon = false, false
+	local plate, ribbon, badgeOn = false, false, false
 	if db.showText and name then
 		if db.textFormat == "short" then name = SHORT_NAMES[class] or name end
 		local outline = db.textOutline
-		if not pcall(text.SetFont, text, STANDARD_TEXT_FONT, db.textSize, outline) then
-			text:SetFontObject("GameFontNormal")
+		local font = FONTS[db.textFont] or STANDARD_TEXT_FONT
+		if not pcall(text.SetFont, text, font, db.textSize, outline) or not text:GetFont() then
+			if not pcall(text.SetFont, text, STANDARD_TEXT_FONT, db.textSize, outline) then
+				text:SetFontObject("GameFontNormal")
+			end
 		end
 		if db.textShadow then
 			text:SetShadowColor(0, 0, 0, 1); text:SetShadowOffset(1, -1)
@@ -404,12 +429,13 @@ function Indicator.Style(f, class, name, isTarget)
 		local pos, x, y = db.textPos, db.textX, db.textY
 		-- With a background the text sits a little further out, so the plate clears the icon.
 		local pad = db.textBg ~= "none" and 4 or 0
-		if pos == "above" then text:SetPoint("BOTTOM", f, "TOP", x, 2 + pad + y)
+		if db.textBg == "badge" then pad = 3 end
+		if pos == "above" then text:SetPoint("BOTTOM", f, "TOP", x, 2 + pad * 2 + y)
 		elseif pos == "left" then text:SetPoint("RIGHT", f, "LEFT", -3 - pad * 2 + x, y)
 		elseif pos == "right" then text:SetPoint("LEFT", f, "RIGHT", 3 + pad * 2 + x, y)
-		else text:SetPoint("TOP", f, "BOTTOM", x, -2 - pad + y) end
+		else text:SetPoint("TOP", f, "BOTTOM", x, -2 - pad * 2 + y) end
 		text:Show()
-		plate, ribbon = db.textBg == "plate", db.textBg == "ribbon"
+		plate, ribbon, badgeOn = db.textBg == "plate", db.textBg == "ribbon", db.textBg == "badge"
 	else
 		text:Hide()
 	end
@@ -443,6 +469,53 @@ function Indicator.Style(f, class, name, isTarget)
 	bg.fill:SetShown(plate or ribbon)
 	bg.tip:SetShown(ribbon)
 	PlaceEdges(bg.edges, bg.fill, plate, br, bgc, bb)
+
+	-- Badge: a dark plate with a coloured edge and pointed end(s). Beside the icon it starts
+	-- behind the icon's centre (one point, away from the icon); above or below it is centred
+	-- with a point on both sides.
+	local badge = f.badge
+	if badgeOn then
+		local h = math.max(db.textSize + 10, math.floor(size * 0.62))
+		local capW = math.floor(h * 0.5)
+		local pos = db.textPos
+		badge:SetFrameLevel(math.max(0, f:GetFrameLevel() - 1))
+		for _, piece in pairs(badge.pieces) do
+			piece:ClearAllPoints()
+			piece:SetHeight(h)
+		end
+		local p = badge.pieces
+		local function Cap(fill, edge, side, anchor, mirror)
+			for _, t in ipairs({ fill, edge }) do
+				t:SetWidth(capW)
+				t:SetTexCoord(mirror and 1 or 0, mirror and 0 or 1, 0, 1)
+				t:SetPoint(side, anchor, side == "LEFT" and "RIGHT" or "LEFT")
+				t:Show()
+			end
+		end
+		for _, t in ipairs({ p.midFill, p.midEdge }) do
+			if pos == "right" then
+				t:SetPoint("LEFT", f, "CENTER", 0, db.textY)
+				t:SetPoint("RIGHT", text, "RIGHT", 4, 0)
+			elseif pos == "left" then
+				t:SetPoint("RIGHT", f, "CENTER", 0, db.textY)
+				t:SetPoint("LEFT", text, "LEFT", -4, 0)
+			else
+				t:SetPoint("LEFT", text, "LEFT", -4, 0)
+				t:SetPoint("RIGHT", text, "RIGHT", 4, 0)
+			end
+			t:Show()
+		end
+		local rightCap = pos ~= "left"
+		local leftCap = pos ~= "right"
+		if rightCap then Cap(p.rFill, p.rEdge, "LEFT", p.midFill, false)
+		else p.rFill:Hide(); p.rEdge:Hide() end
+		if leftCap then Cap(p.lFill, p.lEdge, "RIGHT", p.midFill, true)
+		else p.lFill:Hide(); p.lEdge:Hide() end
+		for _, t in ipairs({ p.midEdge, p.rEdge, p.lEdge }) do t:SetVertexColor(br, bgc, bb, 1) end
+		badge:Show()
+	else
+		badge:Hide()
+	end
 
 	-- Target glow: same shape as the icon, the texture is 1.6x the icon (make_shapes.lua).
 	if isTarget and db.targetGlow then
@@ -1111,7 +1184,7 @@ do
 
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(1060, 790)
+		window:SetSize(1060, 806)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -1167,6 +1240,37 @@ do
 		BuildProfilesTab(profilesTab)
 		SelectTab(1)
 
+		-- Quick styles: one click sets the look (shape, border, name background, font). Size,
+		-- position and the PvP options stay as they are.
+		local LOOK = { shape = "round", border = true, borderStyle = "flat", borderMode = "class", borderSize = 2,
+			iconShadow = false, textBg = "none", textBgMode = "gold", textFont = "default", textUpper = false,
+			textMode = "class", textPos = "below", textShadow = true }
+		local function Look(changes)
+			local look = {}
+			for k, v in pairs(LOOK) do look[k] = v end
+			for k, v in pairs(changes) do look[k] = v end
+			return look
+		end
+		local BADGE = { textBg = "badge", textPos = "right", textMode = "white", textUpper = true, textFont = "serif" }
+		local function With(base, extra) local t = {} for k, v in pairs(base) do t[k] = v end for k, v in pairs(extra) do t[k] = v end return t end
+		local QUICK = {
+			{ "classic", "Classic (round, name below)", Look({}) },
+			{ "ring", "1 - Ring + gold badge", Look(With(BADGE, { borderSize = 2 })) },
+			{ "glow", "2 - Rounded + class badge", Look(With(BADGE, { shape = "rounded", textBgMode = "class", iconShadow = true })) },
+			{ "hex", "3 - Gold hexagon", Look(With(BADGE, { shape = "hex", borderStyle = "metal", borderMode = "gold", borderSize = 3 })) },
+			{ "shield", "4 - Shield + red badge", Look(With(BADGE, { shape = "shield", borderStyle = "metal", borderMode = "gold", borderSize = 3, textBgMode = "enemy" })) },
+			{ "ribbon", "5 - Ribbon", Look(With(BADGE, { textBg = "ribbon", textBgMode = "class", borderSize = 3 })) },
+			{ "minimal", "6 - Minimal (icon + shadow)", Look(With(BADGE, { border = false, iconShadow = true, textBg = "none" })) },
+			{ "diamond", "7 - Gold diamond", Look(With(BADGE, { shape = "diamond", borderStyle = "metal", borderMode = "gold", borderSize = 3, textBgMode = "class" })) },
+		}
+		local quickOptions = {}
+		for i, q in ipairs(QUICK) do quickOptions[i] = { q[1], q[2] } end
+		AddDropdown(settingsTab, "Quick style", { get = function() return "" end, set = function(key)
+			for _, q in ipairs(QUICK) do
+				if q[1] == key then for k, v in pairs(q[3]) do db[k] = v end end
+			end
+		end }, quickOptions, 28, -52, "Sets the whole look in one click (shape, border, name background, font). Size, position and PvP options are kept.")
+
 		local page = CreateFrame("Frame", nil, settingsTab)
 		page:SetPoint("TOPLEFT", 0, -224)
 		page:SetPoint("BOTTOMRIGHT")
@@ -1204,11 +1308,14 @@ do
 		-- Name background (under the class name).
 		local function BgOn() return db.enabled and db.showText and db.textBg ~= "none" end
 		Heading(page, "Name background", COL1, y - 330)
-		Gate(AddDropdown(page, "Style", "textBg", { { "none", "None" }, { "plate", "Dark plate" }, { "ribbon", "Ribbon" } }, COL1, y - 352,
-			"A dark plate with a thin edge, or a colored ribbon with a notched end, behind the class name.").button,
+		Gate(AddDropdown(page, "Style", "textBg", { { "none", "None" }, { "badge", "Badge (pointed)" }, { "plate", "Dark plate" }, { "ribbon", "Ribbon" } }, COL1, y - 352,
+			"Badge: a dark plate with a colored edge and a pointed end, starting behind the icon. Plate: a simple dark box. Ribbon: a colored band with a notched end.").button,
 			function() return db.enabled and db.showText end)
-		Gate(AddDropdown(page, "Color (plate edge / ribbon)", "textBgMode", { { "class", "Class color" }, { "enemy", "Enemy red" },
+		Gate(AddDropdown(page, "Edge / ribbon color", "textBgMode", { { "gold", "Gold" }, { "class", "Class color" }, { "enemy", "Enemy red" },
 			{ "dark", "Dark" }, { "custom", "Custom color" } }, COL1, y - 400).button, BgOn)
+		Gate(AddDropdown(page, "Font", "textFont", { { "default", "Game default" }, { "serif", "Serif (quest text)" },
+			{ "friz", "Friz Quadrata" }, { "narrow", "Arial Narrow" }, { "skurri", "Skurri" } }, COL1, y - 448).button,
+			function() return db.enabled and db.showText end)
 		Gate(AddSwatch(page, "Custom color", "textBgColor", COL1 + 214, y - 418),
 			function() return BgOn() and db.textBgMode == "custom" end)
 
@@ -1245,7 +1352,7 @@ do
 		y = 0
 		Heading(page, "Border", COL3, y)
 		Gate(AddCheck(page, "Show a border", "border", COL3, y - 24), On)
-		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "enemy", "Enemy red" },
+		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "gold", "Gold" }, { "enemy", "Enemy red" },
 			{ "custom", "Custom color" } }, COL3, y - 50).button, BorderOn)
 		Gate(AddSwatch(page, "Custom color", "borderColor", COL3 + 214, y - 68),
 			function() return BorderOn() and db.borderMode == "custom" end)

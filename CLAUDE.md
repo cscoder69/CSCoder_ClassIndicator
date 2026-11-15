@@ -84,3 +84,9 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
 - Name background `textBg` none | plate (dark, 1 px edge) | ribbon (coloured, notched tip pointing
   away from the icon), colour `textBgMode` class | enemy | dark | custom. Col 1 "Name background".
 - Window 1060x790. The current look (round, flat border, no background) is still the default.
+- Badge (`textBg = "badge"`, user wanted the Codex concept's plate): 3 slices (`badge_mid_*`,
+  `badge_cap_*`, fill = dark gradient, edge tinted by `textBgMode`, new "gold" mode), own frame
+  one level BELOW the indicator so it starts behind the icon; one point away from the icon
+  (left/right), both points above/below. Fonts `textFont` (FONTS: default, serif = MORPHEUS,
+  friz, narrow, skurri). "Quick style" dropdown (top-left of the preview) = the 8 Codex looks
+  (`QUICK`), only look keys change.

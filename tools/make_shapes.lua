@@ -99,3 +99,51 @@ write("ribbon_end", function(x, y)
 	return 1, (N - notch) - x + 0.5
 end)
 print("shapes ok")
+
+-- Badge (the plate around the class name), drawn in 3 slices that stretch: a pointed cap and a
+-- middle. "_fill" is a dark vertical gradient (not tinted); "_edge" is a white edge (tinted).
+-- The cap's left side joins the middle; its right side is a chevron point.
+local function writeWH(name, W, H, pixelAt)
+	local f = assert(io.open(dir .. "/" .. name .. ".tga", "wb"))
+	f:write(string.char(0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, W % 256, math.floor(W / 256), H % 256, math.floor(H / 256), 32, 8))
+	local px = {}
+	for row = H - 1, 0, -1 do
+		for x = 0, W - 1 do
+			local r, g, b, a = pixelAt(x + 0.5, row + 0.5)
+			local function c(v) return string.char(math.floor(math.max(0, math.min(1, v)) * 255 + 0.5)) end
+			px[#px + 1] = c(b) .. c(g) .. c(r) .. c(a)
+		end
+	end
+	f:write(table.concat(px))
+	f:close()
+end
+local BH, CAPW, MIDW, EDGE = 64, 32, 8, 5
+local function shade(y) -- dark gradient, a bit lighter at the top
+	local t = y / BH
+	local v = 0.20 - 0.14 * t
+	return v, v * 0.92, v * 0.8
+end
+-- Cap: inside when x <= tip(y): straight until CAPW/2, then a point at the middle height.
+local function capDist(x, y)
+	local half = BH / 2
+	local tipX = CAPW / 2 + (CAPW / 2 - 1) * (1 - math.abs(y - half) / half)
+	-- distance to the slanted edge (approximate, along x scaled by the slope)
+	local slope = (CAPW / 2) / half
+	return (x - tipX) / math.sqrt(1 + slope * slope)
+end
+writeWH("badge_cap_fill", CAPW, BH, function(x, y)
+	local r, g, b = shade(y)
+	return r, g, b, 0.5 - capDist(x, y)
+end)
+writeWH("badge_cap_edge", CAPW, BH, function(x, y)
+	local inside = 0.5 - capDist(x, y)
+	local d = math.min(-capDist(x, y), y, BH - y) -- distance to the slanted, top or bottom edge
+	local edge = math.max(0, math.min(1, EDGE - d + 0.5))
+	return 1, 1, 1, math.min(math.max(0, math.min(1, inside)), edge)
+end)
+writeWH("badge_mid_fill", MIDW, BH, function(x, y) local r, g, b = shade(y); return r, g, b, 1 end)
+writeWH("badge_mid_edge", MIDW, BH, function(x, y)
+	local d = math.min(y, BH - y)
+	return 1, 1, 1, math.max(0, math.min(1, EDGE - d + 0.5))
+end)
+print("badge ok")
