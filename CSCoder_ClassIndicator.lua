@@ -22,7 +22,6 @@ local DEFAULTS = {
 	enabled = true,
 	friends = false,       -- also on friendly players
 	minimap = true,        -- the shared CS.Coder minimap button
-	fixedScale = true,     -- keep the UI scale (nameplate distance scaling made the text shimmer)
 	shape = "round",       -- round | rounded (rounded square) | square | hex | diamond | shield
 	size = 28,
 	alpha = 1,
@@ -79,7 +78,7 @@ end
 local root
 local function FillDefaults(profile)
 	if profile.borderMode == "none" then profile.border, profile.borderMode = false, "class" end -- old "No border"
-	profile.targetArrows, profile.arrowColor, profile.clickTarget, profile.version, profile.clickable, profile.clickArea = nil, nil, nil, nil, nil, nil -- removed
+	profile.targetArrows, profile.arrowColor, profile.clickTarget, profile.version, profile.clickable, profile.clickArea, profile.fixedScale = nil, nil, nil, nil, nil, nil, nil -- removed
 	for key, value in pairs(DEFAULTS) do
 		if type(profile[key]) ~= type(value) then profile[key] = CopyValue(value) end
 	end
@@ -225,16 +224,6 @@ local Indicator = { version = 1 } -- version goes up when options change (indica
 
 -- Our textures are drawn smaller than their 128 px files: trilinear filtering (mipmaps) keeps
 -- their edges smooth instead of jagged.
--- Pixel-perfect scale: one unit = a whole number of screen pixels (closest to the UI's size).
--- With every piece at whole-unit offsets the indicator moves pixel by pixel as ONE piece: no
--- shimmering art or text sliding against its ribbon while the nameplate moves.
-function Indicator.PixelScale()
-	local _, height = GetPhysicalScreenSize()
-	if not height or height <= 0 then return UIParent:GetEffectiveScale() end
-	local pixel = 768 / height
-	return pixel * math.max(1, math.floor(UIParent:GetEffectiveScale() / pixel + 0.5))
-end
-
 local function SetTex(t, path, wrap)
 	if not pcall(t.SetTexture, t, path, wrap, wrap, "TRILINEAR") then t:SetTexture(path, wrap, wrap) end
 end
@@ -675,24 +664,21 @@ local function UpdateUnit(unit)
 		f = Indicator.New(plate)
 		plate.cciIndicator = f
 	end
-	-- Fixed scale: nameplates grow and shrink with distance; following that, the text was
-	-- redrawn at a new fractional size every frame and shimmered. The indicator keeps a
-	-- pixel-perfect scale instead (Indicator.PixelScale).
-	if f.SetIgnoreParentScale then
-		f:SetIgnoreParentScale(db.fixedScale)
-		f:SetScale(db.fixedScale and Indicator.PixelScale() or 1)
-	end
 	-- Redraw only when something changed (class, target, options, the bar it sits on): the game
 	-- sends unit events all the time, and restyling on each one made the name flicker.
 	local isTarget = UnitIsUnit(unit, "target")
 	local target = PlateTarget(plate)
+	-- The indicator lives INSIDE the bar it sits on (Plater's or the game's): same scale and the
+	-- same pixel rounding, so it moves glued to the bar like the unit's own name. (Kept on the
+	-- plate, it rounded its position on its own and wobbled 1-2 px against the bar.)
+	if f:GetParent() ~= target then f:SetParent(target) end
 	if f.lastClass == class and f.lastName == name and f.lastTarget == isTarget and f.lastVersion == Indicator.version
 		and f.lastAnchor == target and f:IsShown() then
 		return
 	end
 	pcall(function()
-		f:SetFrameStrata(plate:GetFrameStrata())
-		f:SetFrameLevel(plate:GetFrameLevel() + 50)
+		f:SetFrameStrata(target:GetFrameStrata())
+		f:SetFrameLevel(target:GetFrameLevel() + 20)
 	end)
 	if Indicator.Style(f, class, name, isTarget) then
 		Indicator.Place(f, target)
@@ -1489,8 +1475,6 @@ do
 		AddCheck(page, "Enable", "enabled", COL1, y - 24, "Show class icons on nameplates.")
 		AddCheck(page, "Minimap button", "minimap", COL1 + 200, y - 24, "The CS.Coder button on the minimap (shared by every CS.Coder addon).")
 		Gate(AddCheck(page, "Also on friendly players", "friends", COL1, y - 50, "Show the icon on allies too (enemies always get it)."), On)
-		Gate(AddCheck(page, "Fixed size", "fixedScale", COL1 + 200, y - 50,
-			"Keeps the icon and the name at the interface's size instead of growing and shrinking with the nameplate (that made the text shimmer)."), On)
 		-- Test mode sits in the title bar: it is an action, not a setting.
 		local test = Button(window, "Test mode", 120)
 		test:SetPoint("TOPLEFT", 572, -12)
