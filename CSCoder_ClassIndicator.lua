@@ -485,6 +485,7 @@ function Indicator.Style(f, class, name, isTarget)
 
 	local text, bg = f.text, f.textBg
 	local plate, ribbon, badgeOn = false, false, false
+	local textGap, textW = 0, 0 -- beside the icon: whole pixels from the icon's edge to the text, text width
 	if db.showText and name then
 		if db.textFormat == "short" then name = SHORT_NAMES[class] or name end
 		local outline = db.textOutline
@@ -511,6 +512,8 @@ function Indicator.Style(f, class, name, isTarget)
 		elseif pos == "right" then text:SetPoint("LEFT", f, "RIGHT", 3 + pad * 2 + x, y)
 		else text:SetPoint("TOP", f, "BOTTOM", x, -2 - pad * 2 + y) end
 		text:Show()
+		textGap = 3 + pad * 2 + (pos == "left" and -x or x)
+		textW = math.ceil(text:GetStringWidth() or 0)
 		plate, ribbon, badgeOn = db.textBg == "plate", db.textBg == "ribbon", db.textBg == "badge"
 	else
 		text:Hide()
@@ -526,14 +529,14 @@ function Indicator.Style(f, class, name, isTarget)
 		-- Beside the icon the background always starts at the icon's edge; above or below it
 		-- just wraps the text.
 		local pos = db.textPos
+		-- Whole-pixel widths (the text width rounded up), so every piece sits a whole number of
+		-- pixels from the icon and they all round the same way.
 		if pos == "right" then
 			bg.fill:SetPoint("LEFT", f, "RIGHT", 0, db.textY)
-			bg.fill:SetPoint("RIGHT", text, "RIGHT", padX, 0)
-			bg.fill:SetHeight(db.textSize + padY * 2)
+			bg.fill:SetSize(textGap + textW + padX, db.textSize + padY * 2)
 		elseif pos == "left" then
 			bg.fill:SetPoint("RIGHT", f, "LEFT", 0, db.textY)
-			bg.fill:SetPoint("LEFT", text, "LEFT", -padX, 0)
-			bg.fill:SetHeight(db.textSize + padY * 2)
+			bg.fill:SetSize(textGap + textW + padX, db.textSize + padY * 2)
 		else
 			bg.fill:SetPoint("TOPLEFT", text, "TOPLEFT", -padX, padY)
 			bg.fill:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", padX, -padY)
@@ -582,12 +585,13 @@ function Indicator.Style(f, class, name, isTarget)
 			end
 		end
 		for _, t in ipairs({ p.midFill, p.midEdge }) do
+			local half = math.floor(size / 2)
 			if pos == "right" then
-				t:SetPoint("LEFT", f, "CENTER", 0, db.textY)
-				t:SetPoint("RIGHT", text, "RIGHT", 4, 0)
+				t:SetPoint("LEFT", f, "LEFT", half, db.textY)
+				t:SetWidth(size - half + textGap + textW + 4)
 			elseif pos == "left" then
-				t:SetPoint("RIGHT", f, "CENTER", 0, db.textY)
-				t:SetPoint("LEFT", text, "LEFT", -4, 0)
+				t:SetPoint("RIGHT", f, "RIGHT", -half, db.textY)
+				t:SetWidth(size - half + textGap + textW + 4)
 			else
 				t:SetPoint("LEFT", text, "LEFT", -4, 0)
 				t:SetPoint("RIGHT", text, "RIGHT", 4, 0)
@@ -648,9 +652,13 @@ end
 -- The indicator's anchor point and offsets from the screen's bottom-left, or nil.
 function Lock.Spot(f)
 	local target = f.lockTarget
-	if not target then return nil end
+	if not target or Lock.refused then return nil end
 	local ok, left, bottom, width, height = pcall(target.GetRect, target)
-	if not ok or type(left) ~= "number" or type(width) ~= "number" then return nil end
+	if not ok or type(left) ~= "number" or type(width) ~= "number" then
+		-- The game restricts nameplates (WoW Forever): stop asking for this session.
+		Lock.refused = true
+		return nil
+	end
 	local s, fs = target:GetEffectiveScale(), f:GetEffectiveScale()
 	local side, x, y = db.anchor, db.offsetX, db.offsetY
 	local point, ax, ay
@@ -686,9 +694,18 @@ function Lock.Attach(f, target)
 		Indicator.SetSnapping(f, true)
 		if Lock.verbose and not Lock.said then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock ON") end
 	else
+		-- Can't be measured (the game restricts nameplates): every piece rounds the SAME way
+		-- instead. A pixel-perfect scale (1 unit = whole screen pixels), whole-pixel offsets
+		-- inside, snapping on everywhere: the set moves as one block.
 		Lock.frames[f] = nil
+		if f.SetIgnoreParentScale then
+			f:SetIgnoreParentScale(true)
+			local _, height = GetPhysicalScreenSize()
+			local pixel = (height and height > 0) and (768 / height) or 1
+			f:SetScale(pixel * math.max(1, math.floor(UIParent:GetEffectiveScale() / pixel + 0.5)))
+		end
 		Indicator.Place(f, target)
-		Indicator.SetSnapping(f, false)
+		Indicator.SetSnapping(f, true)
 		if Lock.verbose and not Lock.said then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock NOT possible here (the bar can't be measured)") end
 	end
 end
@@ -700,7 +717,7 @@ Lock.driver:SetScript("OnUpdate", function()
 			-- Can't be measured any more: back to plain anchoring.
 			Lock.frames[f] = nil
 			Indicator.Place(f, f.lockTarget)
-			Indicator.SetSnapping(f, false)
+			Indicator.SetSnapping(f, true)
 		end
 	end
 end)
