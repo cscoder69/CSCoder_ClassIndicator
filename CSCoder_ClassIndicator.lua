@@ -641,6 +641,10 @@ local function PixelSize()
 	local _, height = GetPhysicalScreenSize()
 	return (height and height > 0) and (768 / height) or 1
 end
+function Lock.Snap(value, current, px)
+	if current and math.abs(value - current) < px * 0.8 then return current end
+	return math.floor(value / px + 0.5) * px
+end
 -- The indicator's anchor point and offsets from the screen's bottom-left, or nil.
 function Lock.Spot(f)
 	local target = f.lockTarget
@@ -658,12 +662,8 @@ function Lock.Spot(f)
 	-- Hysteresis: a unit standing still still bobs a little, and right between two pixels plain
 	-- rounding flipped the indicator 1 px back and forth. It moves to a new pixel only once the
 	-- bar has moved most of a pixel away from where the indicator sits.
-	local function Snap(value, current)
-		if current and math.abs(value - current) < px * 0.8 then return current end
-		return math.floor(value / px + 0.5) * px
-	end
-	ax = Snap(ax, f.lockAX)
-	ay = Snap(ay, f.lockAY)
+	ax = Lock.Snap(ax, f.lockAX, px)
+	ay = Lock.Snap(ay, f.lockAY, px)
 	f.lockAX, f.lockAY = ax, ay
 	return point, ax / fs, ay / fs
 end
