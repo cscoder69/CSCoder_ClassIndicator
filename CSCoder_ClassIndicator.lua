@@ -32,8 +32,9 @@ local DEFAULTS = {
 	borderMode = "class",  -- class | enemy | custom
 	borderColor = { 1, 0.82, 0, 1 },
 	borderSize = 2,
-	borderStyle = "soft",  -- soft (ring + soft glow) | flat | metal (a shine tinted with the border colour)
+	borderStyle = "frame", -- frame (thin rim + soft dark outline) | soft (ring + soft glow) | flat | metal
 	innerShade = true,     -- soft dark edge inside the icon (depth)
+	iconSheen = true,      -- soft glass reflection on the top half of the icon
 	iconShadow = false,    -- soft dark shadow under the icon
 	spellIcons = false,    -- the spellbook class icons (richer art) instead of the character-creation ones
 	textBg = "none",       -- name background: none | badge (pointed, coloured edge) | plate | ribbon
@@ -237,7 +238,7 @@ end
 -- version of the shape for the metal border, and the soft glow.
 local function Shape(mask, glow)
 	return { mask = MEDIA .. mask, hole = MEDIA .. mask .. "_hole", metal = MEDIA .. mask .. "_metal",
-		shade = MEDIA .. mask .. "_shade", glow = MEDIA .. "glow_" .. glow }
+		shade = MEDIA .. mask .. "_shade", sheen = MEDIA .. mask .. "_sheen", glow = MEDIA .. "glow_" .. glow }
 end
 local SHAPES = {
 	round = Shape("circle", "round"),
@@ -287,9 +288,12 @@ function Indicator.New(parent)
 	badge:SetAllPoints()
 	badge.pieces = {}
 	for key, file in pairs({ midFill = "badge_mid_fill", midEdge = "badge_mid_edge", rFill = "badge_cap_fill",
-		rEdge = "badge_cap_edge", lFill = "badge_cap_fill", lEdge = "badge_cap_edge" }) do
-		local t = badge:CreateTexture(nil, key:find("Edge") and "BORDER" or "BACKGROUND")
+		rEdge = "badge_cap_edge", lFill = "badge_cap_fill", lEdge = "badge_cap_edge", midSheen = "badge_mid_sheen",
+		rSheen = "badge_cap_sheen", lSheen = "badge_cap_sheen" }) do
+		local layer = key:find("Edge") and "BORDER" or key:find("Sheen") and "ARTWORK" or "BACKGROUND"
+		local t = badge:CreateTexture(nil, layer)
 		t:SetTexture(MEDIA .. file)
+		if key:find("Sheen") then t:SetBlendMode("ADD"); t:SetVertexColor(1, 1, 1, 0.22) end
 		badge.pieces[key] = t
 	end
 	badge:Hide()
@@ -326,12 +330,17 @@ function Indicator.New(parent)
 	f.shade = f:CreateTexture(nil, "ARTWORK", nil, 2)
 	f.shade:SetAllPoints(f.icon)
 	f.shade:Hide()
+	-- Glass sheen: a soft white reflection on the top half of the icon.
+	f.sheen = f:CreateTexture(nil, "ARTWORK", nil, 3)
+	f.sheen:SetAllPoints(f.icon)
+	f.sheen:SetBlendMode("ADD")
+	f.sheen:Hide()
 	f.borderGlow = f:CreateTexture(nil, "BACKGROUND", nil, -6)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
 	-- Every drawn piece, for Indicator.SetSnapping.
-	local regions = { f.icon, f.iconMask, f.ring, f.holeMask, f.shade, f.shadow, f.glow, f.borderGlow, f.text, bg.fill, bg.tip }
+	local regions = { f.icon, f.iconMask, f.ring, f.holeMask, f.shade, f.sheen, f.shadow, f.glow, f.borderGlow, f.text, bg.fill, bg.tip }
 	for _, list in ipairs({ f.edges, bg.edges, healer.parts }) do
 		for _, region in ipairs(list) do regions[#regions + 1] = region end
 	end
@@ -418,6 +427,14 @@ function Indicator.Style(f, class, name, isTarget)
 	else
 		f.shade:Hide()
 	end
+	-- Glass sheen.
+	if db.iconSheen and f.canMask then
+		SetTex(f.sheen, info.sheen)
+		f.sheen:SetVertexColor(1, 1, 1, 0.2)
+		f.sheen:Show()
+	else
+		f.sheen:Hide()
+	end
 
 	-- Border: a ring of the shape: flat colour, the metal shine tinted with that colour, or
 	-- "soft" (the flat ring plus a soft glow of the same colour around it).
@@ -431,8 +448,17 @@ function Indicator.Style(f, class, name, isTarget)
 	f.ring:SetShown(ring)
 	if ring and db.borderStyle == "soft" then
 		SetTex(f.borderGlow, info.glow)
+		f.borderGlow:SetBlendMode("ADD")
 		f.borderGlow:SetSize(size * 1.45, size * 1.45)
 		f.borderGlow:SetVertexColor(cr, cg, cb, 0.55)
+		f.borderGlow:Show()
+	elseif ring and db.borderStyle == "frame" then
+		-- "Soft frame": a soft dark outline around a thin, slightly see-through rim.
+		f.ring:SetVertexColor(cr, cg, cb, 0.85)
+		SetTex(f.borderGlow, info.glow)
+		f.borderGlow:SetBlendMode("BLEND")
+		f.borderGlow:SetSize(size * 1.32, size * 1.32)
+		f.borderGlow:SetVertexColor(0, 0, 0, 0.9)
 		f.borderGlow:Show()
 	else
 		f.borderGlow:Hide()
@@ -613,6 +639,13 @@ function Indicator.Style(f, class, name, isTarget)
 		if leftCap then Cap(p.lFill, p.lEdge, "RIGHT", p.midFill, true)
 		else p.lFill:Hide(); p.lEdge:Hide() end
 		for _, t in ipairs({ p.midEdge, p.rEdge, p.lEdge }) do t:SetVertexColor(br, bgc, bb, 1) end
+		-- Sheen over each piece (same place and mirroring as its fill).
+		for fill, sheen in pairs({ [p.midFill] = p.midSheen, [p.rFill] = p.rSheen, [p.lFill] = p.lSheen }) do
+			sheen:ClearAllPoints()
+			sheen:SetAllPoints(fill)
+			sheen:SetTexCoord(fill:GetTexCoord())
+			sheen:SetShown(fill:IsShown())
+		end
 		badge:Show()
 	else
 		badge:Hide()
@@ -1541,7 +1574,7 @@ do
 
 		-- Quick styles: one click sets the look (shape, border, name background, font). Size,
 		-- position and the PvP options stay as they are.
-		local LOOK = { shape = "round", border = true, borderStyle = "soft", innerShade = true, borderMode = "class", borderSize = 2,
+		local LOOK = { shape = "round", border = true, borderStyle = "frame", iconSheen = true, innerShade = true, borderMode = "class", borderSize = 2,
 			iconShadow = false, textBg = "none", textBgMode = "gold", textFont = "default", textUpper = false,
 			textMode = "class", textPos = "below", textShadow = true }
 		local function Look(changes)
@@ -1676,8 +1709,9 @@ do
 			{ "custom", "Custom color" } }, COL3, y - 50).button, BorderOn)
 		Gate(AddSwatch(page, "Custom color", "borderColor", COL3 + 214, y - 68),
 			function() return BorderOn() and db.borderMode == "custom" end)
-		Gate(AddDropdown(page, "Border style", "borderStyle", { { "soft", "Soft glow" }, { "flat", "Flat color" }, { "metal", "Metal shine" } }, COL3, y - 98,
-			"Soft glow: the border plus a soft glow of its color. Flat: a plain line. Metal shine: a light-dark-light shine tinted with the border color (gold looks like polished metal).").button, BorderOn)
+		Gate(AddDropdown(page, "Border style", "borderStyle", { { "frame", "Soft frame" }, { "soft", "Soft glow" }, { "flat", "Flat color" }, { "metal", "Metal shine" } }, COL3, y - 98,
+			"Soft frame: a thin rim with a soft dark outline (the smoothest). Soft glow: the border plus a soft glow of its color. Flat: a plain line. Metal shine: a light-dark-light shine tinted with the border color (gold looks like polished metal).").button, BorderOn)
+		Gate(AddCheck(page, "Glass shine", "iconSheen", COL3 + 214, y - 116, "A soft glass reflection on the top half of the icon."), On)
 		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL3, y - 146).slider, BorderOn)
 
 		y = y - 208

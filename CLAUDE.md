@@ -105,3 +105,11 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   (ring + glow of its colour, new default); target glow warm gold (1, .74, .28) pulsing with an
   Alpha AnimationGroup (BOUNCE, IN_OUT) instead of OnUpdate. Spellbook icon art option
   (`spellIcons`, Interface\Icons\ClassIcon_<Class>, cut 8%). Visual pickers ("Pick..." buttons).
+- BlitzFramesTwo-style finish (2026-11-14, user: "retoques de qualidade visual do BlitzFramesTwo"):
+  border style "frame" = thin rim (85%) + soft BLACK outline (glow texture, BLEND, 1.32x), the new
+  default; glass sheen on the icon (`iconSheen`, `<mask>_sheen.tga`, ADD 20%) and on the badge
+  (`badge_*_sheen.tga`, ADD 22%). Option "Glass shine" in Border.
+- Restricted plates (Forever): GetRect on the bar/plate is refused, text can't turn snapping off.
+  So: pixel-perfect scale + snapping on everywhere + whole-pixel widths and top-corner placement
+  (text, plate, badge). Lock (measure every frame) stays as code but turns itself off after the
+  first refusal (`Lock.refused`). `/ci lock` shows the status.

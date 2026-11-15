@@ -154,3 +154,24 @@ writeWH("badge_mid_edge", MIDW, BH, function(x, y)
 	return 1, 1, 1, math.max(0, math.min(1, EDGE - d + 0.5))
 end)
 print("badge ok")
+
+-- Glass sheen: white, inside the shape, strongest at the top and gone by the middle (drawn ADD).
+for _, s in ipairs(SHAPES) do
+	write(s.mask .. "_sheen", function(x, y)
+		local inside = 0.5 - s.sdf(x - C, y - C, R)
+		local t = y / N
+		local a = t < 0.55 and (1 - t / 0.55) ^ 1.5 or 0
+		return 1, math.max(0, math.min(1, inside)) * a
+	end)
+end
+-- Badge sheen: same idea for the middle and the pointed cap.
+writeWH("badge_mid_sheen", MIDW, BH, function(x, y)
+	local t = y / BH
+	return 1, 1, 1, t < 0.5 and (1 - t / 0.5) ^ 1.5 or 0
+end)
+writeWH("badge_cap_sheen", CAPW, BH, function(x, y)
+	local t = y / BH
+	local inside = math.max(0, math.min(1, 0.5 - capDist(x, y)))
+	return 1, 1, 1, inside * (t < 0.5 and (1 - t / 0.5) ^ 1.5 or 0)
+end)
+print("sheen ok")
