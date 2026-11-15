@@ -107,6 +107,9 @@ env.UnitCanAttack = function(_, u) return units[u] and units[u].enemy or false e
 env.UnitIsEnemy = env.UnitCanAttack
 env.UnitClass = function(u) local d = units[u]; if d then return d.name, d.class end end
 
+env.Minimap = NewWidget("Minimap")
+env.GetCursorPosition = function() return 0, 0 end
+local shared = assert(loadfile(dir .. "/CSCoderMinimap.lua")); setfenv(shared, env); try("shared minimap", shared)
 local chunk = assert(loadfile(dir .. "/CSCoder_ClassIndicator.lua"))
 setfenv(chunk, env)
 try("load", chunk, "CSCoder_ClassIndicator")
@@ -257,3 +260,15 @@ Fire("ADDON_LOADED", "CSCoder_ClassIndicator")
 local r2 = env.CSCoderClassIndicatorDB
 print("old save -> Default keeps size 40 / square", r2.profiles and r2.profiles.Default.size == 40 and r2.profiles.Default.shape == "square")
 print("errors after profiles:", errors)
+
+-- Shared minimap button.
+local lib = env.CSCoderMinimap
+print("minimap: one button, one addon", lib and lib.button ~= nil and #lib.addons == 1)
+local opened = 0
+lib.Register({ name = "Another addon", open = function() opened = opened + 1 end, active = function() return true end })
+try("minimap click (2 addons)", lib.button._scripts.OnClick, lib.button, "LeftButton")
+print("minimap: 2 addons -> menu", lib.menu ~= nil and lib.menu._shown)
+try("menu row", lib.menu.rows[1]._scripts.OnClick, lib.menu.rows[1], "LeftButton")
+print("minimap: menu row opens that addon", opened == 1)
+try("minimap tooltip", lib.button._scripts.OnEnter, lib.button)
+print("errors after minimap:", errors)

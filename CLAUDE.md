@@ -90,3 +90,9 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   (left/right), both points above/below. Fonts `textFont` (FONTS: default, serif = MORPHEUS,
   friz, narrow, skurri). "Quick style" dropdown (top-left of the preview) = the 8 Codex looks
   (`QUICK`), only look keys change.
+- Shared minimap button `CSCoderMinimap.lua` (2026-11-14, user: a "CS" button, menu to pick the
+  addon when several are installed). The SAME file ships in every CS.Coder addon (keep them
+  identical; bump VERSION when changing it): global `CSCoderMinimap`, frames
+  `CSCoder_MinimapButton` / `CSCoder_MinimapMenu`. One addon: left = open, right = its action;
+  more: menu (right-click a row = its action). Angle saved by every addon (`root.minimapAngle`).
+  Option "Minimap button" (`minimap`) in Display.

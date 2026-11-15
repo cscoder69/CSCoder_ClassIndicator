@@ -5,4 +5,5 @@
 ## Version: @project-version@
 ## SavedVariables: CSCoderClassIndicatorDB
 
+CSCoderMinimap.lua
 CSCoder_ClassIndicator.lua

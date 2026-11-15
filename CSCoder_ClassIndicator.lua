@@ -21,6 +21,7 @@ local ENEMY_RED = { 0.9, 0.1, 0.1, 1 }
 local DEFAULTS = {
 	enabled = true,
 	friends = false,       -- also on friendly players
+	minimap = true,        -- the shared CS.Coder minimap button
 	shape = "round",       -- round | rounded (rounded square) | square | hex | diamond | shield
 	size = 28,
 	alpha = 1,
@@ -611,6 +612,7 @@ end
 
 local function Changed()
 	RefreshAll()
+	if CSCoderMinimap then CSCoderMinimap.Update() end
 	if UpdatePreview then UpdatePreview() end
 end
 
@@ -1286,6 +1288,7 @@ do
 		Heading(page, "Display", COL1, y)
 		AddCheck(page, "Enable", "enabled", COL1, y - 24, "Show class icons on nameplates.")
 		Gate(AddCheck(page, "Also on friendly players", "friends", COL1, y - 50, "Show the icon on allies too (enemies always get it)."), On)
+		AddCheck(page, "Minimap button", "minimap", COL1 + 200, y - 50, "The CS.Coder button on the minimap (shared by every CS.Coder addon).")
 		local test = Button(page, "Test mode", 120)
 		test:SetPoint("TOPLEFT", COL1 + 200, y - 22)
 		Tooltip(test, "Puts a sample class on EVERY nameplate around you (mobs, NPCs, allies), so you can adjust it on real nameplates. Same as /ci test.")
@@ -1457,6 +1460,22 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		self:UnregisterEvent("ADDON_LOADED")
 		LoadSettings()
 		pcall(BuildLanding)
+		if CSCoderMinimap then
+			CSCoderMinimap.Register({
+				name = SUBTITLE,
+				open = function() OpenOptions(true) end,
+				rightClick = function()
+					db.enabled = not db.enabled
+					print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
+					Changed()
+				end,
+				leftHint = "Left-click: options", rightHint = "Right-click: turn on / off",
+				shown = function() return db.minimap end,
+				active = function() return db.enabled end,
+				getAngle = function() return root.minimapAngle end,
+				setAngle = function(angle) root.minimapAngle = angle end,
+			})
+		end
 		for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
 			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED" }) do
 			pcall(self.RegisterEvent, self, e)
