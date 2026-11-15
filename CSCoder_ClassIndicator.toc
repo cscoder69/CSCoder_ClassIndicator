@@ -3,6 +3,7 @@
 ## Notes: The official class icon (and class name) above enemy players' nameplates. Works with the default UI and nameplate addons like Plater.
 ## Author: CS.Coder
 ## Version: @project-version@
+## X-Curse-Project-ID: 1806392
 ## SavedVariables: CSCoderClassIndicatorDB
 
 CSCoderMinimap.lua

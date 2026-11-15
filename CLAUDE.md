@@ -126,6 +126,7 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
 
 ## Repository (2026-11-14)
 GitHub cscoder69/CSCoder_ClassIndicator (public, MIT), branch main. Workflow like Quest Indicator:
-check job (syntax, mock, translations) then BigWigs packager on a v* tag. No CurseForge project yet:
+check job (syntax, mock, translations) then BigWigs packager on a v* tag. CurseForge project 1806392
+(created by the user 2026-11-14, v1.0.0 uploaded by hand: tags start at v1.0.1). Earlier note:
 when created, add "## X-Curse-Project-ID" to the .toc and the CF_API_KEY secret. Dev auto test mode
 and the /ci lock diagnostics were removed before the first push.
