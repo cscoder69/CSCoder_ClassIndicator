@@ -220,7 +220,7 @@ end
 -- The indicator: one frame type for real nameplates and the preview
 ---------------------------------------------------------------------------------------------
 
-local Indicator = {}
+local Indicator = { version = 1 } -- version goes up when options change (indicators redraw)
 
 -- Our textures are drawn smaller than their 128 px files: trilinear filtering (mipmaps) keeps
 -- their edges smooth instead of jagged.
@@ -657,13 +657,22 @@ local function UpdateUnit(unit)
 		f = Indicator.New(plate)
 		plate.cciIndicator = f
 	end
+	-- Redraw only when something changed (class, target, options, the bar it sits on): the game
+	-- sends unit events all the time, and restyling on each one made the name flicker.
+	local isTarget = UnitIsUnit(unit, "target")
+	local target = PlateTarget(plate)
+	if f.lastClass == class and f.lastName == name and f.lastTarget == isTarget and f.lastVersion == Indicator.version
+		and f.lastAnchor == target and f:IsShown() then
+		return
+	end
 	pcall(function()
 		f:SetFrameStrata(plate:GetFrameStrata())
 		f:SetFrameLevel(plate:GetFrameLevel() + 50)
 	end)
-	if Indicator.Style(f, class, name, UnitIsUnit(unit, "target")) then
-		Indicator.Place(f, PlateTarget(plate))
+	if Indicator.Style(f, class, name, isTarget) then
+		Indicator.Place(f, target)
 		f:Show()
+		f.lastClass, f.lastName, f.lastTarget, f.lastVersion, f.lastAnchor = class, name, isTarget, Indicator.version, target
 	end
 end
 
@@ -676,6 +685,7 @@ local function RefreshAll()
 end
 
 local function Changed()
+	Indicator.version = Indicator.version + 1 -- options changed: every indicator redraws
 	RefreshAll()
 	if CSCoderMinimap then CSCoderMinimap.Update() end
 	if UpdatePreview then UpdatePreview() end
@@ -1661,6 +1671,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 			pcall(self.RegisterEvent, self, e)
 		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
+		Indicator.version = Indicator.version + 1 -- a full redraw when entering the world
 		C_Timer.After(0.1, function() RefreshAll() end)
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
 		UpdateUnit(arg1)
