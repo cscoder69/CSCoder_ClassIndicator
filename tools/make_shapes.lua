@@ -92,6 +92,13 @@ for _, s in ipairs(SHAPES) do
 		if d < 0 then return 1, math.max(0, 1 + d / 3) end
 		return 1, math.exp(-(d / GLOW_W) ^ 2)
 	end)
+	-- Inner shade: black, strongest at the shape's edge and fading inwards (depth on the icon).
+	write(s.mask .. "_shade", function(x, y)
+		local depth = -s.sdf(x - C, y - C, R) -- distance inside the edge
+		if depth < 0 then return 0, 0 end
+		local fade = 1 - math.min(1, depth / (N * 0.2))
+		return 0, math.min(1, depth + 0.5) * 0.75 * fade ^ 1.6
+	end)
 end
 -- Ribbon end: a square with a V notch cut into its right side.
 write("ribbon_end", function(x, y)

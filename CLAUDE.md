@@ -96,3 +96,9 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   `CSCoder_MinimapButton` / `CSCoder_MinimapMenu`. One addon: left = open, right = its action;
   more: menu (right-click a row = its action). Angle saved by every addon (`root.minimapAngle`).
   Option "Minimap button" (`minimap`) in Display.
+- Polish from studying BlitzFramesTwoForever (2026-11-14; techniques only, our own art):
+  `SetTex` = SetTexture(..., "TRILINEAR") for every 128 px texture; SetSnapToPixelGrid(false) +
+  SetTexelSnappingBias(0); inner shade (`<mask>_shade.tga`, `innerShade`, on); border style "soft"
+  (ring + glow of its colour, new default); target glow warm gold (1, .74, .28) pulsing with an
+  Alpha AnimationGroup (BOUNCE, IN_OUT) instead of OnUpdate. Spellbook icon art option
+  (`spellIcons`, Interface\Icons\ClassIcon_<Class>, cut 8%). Visual pickers ("Pick..." buttons).

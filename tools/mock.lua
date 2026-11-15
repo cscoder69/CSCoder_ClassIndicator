@@ -181,7 +181,7 @@ for _, shape in ipairs({ "round", "rounded", "square", "hex", "diamond", "shield
 			for _, anchor in ipairs({ "top", "bottom", "left", "right" }) do
 				db.shape, db.textPos, db.anchor = shape, pos, anchor
 				db.textBg = ({ "none", "plate", "ribbon", "badge" })[(#pos + #anchor) % 4 + 1]
-				db.borderStyle, db.iconShadow = (#shape % 2 == 0) and "metal" or "flat", #pos % 2 == 0
+				db.borderStyle, db.iconShadow = ({ "soft", "flat", "metal" })[#shape % 3 + 1], #pos % 2 == 0
 				db.border = border ~= "off"; if db.border then db.borderMode = border end
 				Fire("PLAYER_ENTERING_WORLD")
 			end
@@ -211,7 +211,7 @@ env.UnitIsUnit = function(a, b) return a == b or (a == "nameplate1" and b == "ta
 Fire("PLAYER_TARGET_CHANGED")
 print("sizes: big class 30, big + target 60", sizes[1], sizes[#sizes])
 print("target glow shown", ind.glow._shown)
-if ind.glowPulse._scripts.OnUpdate then try("glow pulse", ind.glowPulse._scripts.OnUpdate, ind.glowPulse, 0.1) end
+print("glow animation made", ind.glowAnim ~= nil)
 ind.SetSize = setSize
 Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 print("removed -> hidden", not Shown("nameplate1"))

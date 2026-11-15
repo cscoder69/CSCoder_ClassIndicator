@@ -32,7 +32,8 @@ local DEFAULTS = {
 	borderMode = "class",  -- class | enemy | custom
 	borderColor = { 1, 0.82, 0, 1 },
 	borderSize = 2,
-	borderStyle = "flat",  -- flat | metal (a shine tinted with the border colour)
+	borderStyle = "soft",  -- soft (ring + soft glow) | flat | metal (a shine tinted with the border colour)
+	innerShade = true,     -- soft dark edge inside the icon (depth)
 	iconShadow = false,    -- soft dark shadow under the icon
 	spellIcons = false,    -- the spellbook class icons (richer art) instead of the character-creation ones
 	textBg = "none",       -- name background: none | badge (pointed, coloured edge) | plate | ribbon
@@ -61,7 +62,7 @@ local DEFAULTS = {
 	bigClasses = {},       -- class -> true: shown bigger (the ones you fear most)
 	bigScale = 1.3,
 	targetGlow = true,     -- pulsing glow around your target's icon
-	glowColor = { 1, 0.82, 0, 1 },
+	glowColor = { 1, 0.74, 0.28, 1 }, -- warm gold
 }
 local SETTINGS_VERSION = 2
 
@@ -221,11 +222,18 @@ end
 
 local Indicator = {}
 
+-- Our textures are drawn smaller than their 128 px files: trilinear filtering (mipmaps) keeps
+-- their edges smooth instead of jagged.
+local function SetTex(t, path, wrap)
+	if not pcall(t.SetTexture, t, path, wrap, wrap, "TRILINEAR") then t:SetTexture(path, wrap, wrap) end
+end
+
 -- Shapes (textures made by tools/make_shapes.lua): the icon's mask, the "hole" that cuts the
 -- border into a ring (so a lower opacity never shows the border through the icon), a metal
 -- version of the shape for the metal border, and the soft glow.
 local function Shape(mask, glow)
-	return { mask = MEDIA .. mask, hole = MEDIA .. mask .. "_hole", metal = MEDIA .. mask .. "_metal", glow = MEDIA .. "glow_" .. glow }
+	return { mask = MEDIA .. mask, hole = MEDIA .. mask .. "_hole", metal = MEDIA .. mask .. "_metal",
+		shade = MEDIA .. mask .. "_shade", glow = MEDIA .. "glow_" .. glow }
 end
 local SHAPES = {
 	round = Shape("circle", "round"),
@@ -299,12 +307,30 @@ function Indicator.New(parent)
 	f.glow:SetPoint("CENTER")
 	f.glow:SetBlendMode("ADD")
 	f.glow:Hide()
-	f.glowPulse = CreateFrame("Frame", nil, f)
-	f.glowPulse:Hide()
-	f.glowPulse:SetScript("OnUpdate", function(self, elapsed)
-		self.t = (self.t or 0) + elapsed
-		f.glow:SetAlpha(0.55 + 0.45 * math.abs(math.sin(self.t * 3)))
-	end)
+	-- A smooth pulse driven by the game's animation system (eased, no per-frame Lua).
+	if f.glow.CreateAnimationGroup then
+		local anim = f.glow:CreateAnimationGroup()
+		local fade = anim:CreateAnimation("Alpha")
+		fade:SetFromAlpha(1)
+		fade:SetToAlpha(0.4)
+		fade:SetDuration(0.9)
+		if fade.SetSmoothing then fade:SetSmoothing("IN_OUT") end
+		anim:SetLooping("BOUNCE")
+		f.glowAnim = anim
+	end
+	-- Inner shade (over the icon) and the soft border glow (behind it).
+	f.shade = f:CreateTexture(nil, "ARTWORK", nil, 2)
+	f.shade:SetAllPoints(f.icon)
+	f.shade:Hide()
+	f.borderGlow = f:CreateTexture(nil, "BACKGROUND", nil, -6)
+	f.borderGlow:SetPoint("CENTER")
+	f.borderGlow:SetBlendMode("ADD")
+	f.borderGlow:Hide()
+	-- No pixel snapping: smooth edges at any nameplate scale.
+	for _, t in ipairs({ f.icon, f.ring, f.shadow, f.glow, f.shade, f.borderGlow }) do
+		if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false) end
+		if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
+	end
 	f:Hide()
 	return f
 end
@@ -361,22 +387,38 @@ function Indicator.Style(f, class, name, isTarget)
 		f.icon:SetTexCoord(l, r, t, b)
 	else
 		local texture, l, r, t, b = ClassArt(class)
-		f.icon:SetTexture(texture)
+		SetTex(f.icon, texture)
 		f.icon:SetTexCoord(l, r, t, b)
 	end
 	if f.canMask then
-		f.iconMask:SetTexture(info.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+		SetTex(f.iconMask, info.mask, "CLAMPTOBLACKADDITIVE")
+	end
+	-- Inner shade: a soft dark edge inside the icon, for depth.
+	if db.innerShade and f.canMask then
+		SetTex(f.shade, info.shade)
+		f.shade:Show()
+	else
+		f.shade:Hide()
 	end
 
-	-- Border: a ring of the shape (flat colour, or the metal shine tinted with that colour).
+	-- Border: a ring of the shape: flat colour, the metal shine tinted with that colour, or
+	-- "soft" (the flat ring plus a soft glow of the same colour around it).
 	local cr, cg, cb = ModeColor(db.borderMode, db.borderColor, class)
 	local ring = border > 0 and f.canMask
 	if ring then
-		f.ring:SetTexture(db.borderStyle == "metal" and info.metal or info.mask)
+		SetTex(f.ring, db.borderStyle == "metal" and info.metal or info.mask)
 		f.ring:SetVertexColor(cr, cg, cb, 1)
-		f.holeMask:SetTexture(info.hole, "CLAMPTOWHITE", "CLAMPTOWHITE")
+		SetTex(f.holeMask, info.hole, "CLAMPTOWHITE")
 	end
 	f.ring:SetShown(ring)
+	if ring and db.borderStyle == "soft" then
+		SetTex(f.borderGlow, info.glow)
+		f.borderGlow:SetSize(size * 1.45, size * 1.45)
+		f.borderGlow:SetVertexColor(cr, cg, cb, 0.55)
+		f.borderGlow:Show()
+	else
+		f.borderGlow:Hide()
+	end
 	local square = border > 0 and not f.canMask
 	for i, e in ipairs(f.edges) do
 		e:ClearAllPoints()
@@ -392,7 +434,7 @@ function Indicator.Style(f, class, name, isTarget)
 
 	-- Drop shadow.
 	if db.iconShadow then
-		f.shadow:SetTexture(info.glow)
+		SetTex(f.shadow, info.glow)
 		f.shadow:SetVertexColor(0, 0, 0, 1)
 		f.shadow:SetSize(size * 1.6, size * 1.6)
 		f.shadow:ClearAllPoints()
@@ -549,14 +591,14 @@ function Indicator.Style(f, class, name, isTarget)
 	-- Target glow: same shape as the icon, the texture is 1.6x the icon (make_shapes.lua).
 	if isTarget and db.targetGlow then
 		local c = db.glowColor
-		f.glow:SetTexture(info.glow)
+		SetTex(f.glow, info.glow)
 		f.glow:SetSize(size * 1.6, size * 1.6)
-		f.glow:SetVertexColor(c[1], c[2], c[3], 1)
+		f.glow:SetVertexColor(c[1], c[2], c[3], 0.85)
 		f.glow:Show()
-		f.glowPulse:Show()
+		if f.glowAnim and not f.glowAnim:IsPlaying() then f.glowAnim:Play() end
 	else
 		f.glow:Hide()
-		f.glowPulse:Hide()
+		if f.glowAnim then f.glowAnim:Stop() end
 	end
 	return true
 end
@@ -1368,7 +1410,7 @@ do
 
 		-- Quick styles: one click sets the look (shape, border, name background, font). Size,
 		-- position and the PvP options stay as they are.
-		local LOOK = { shape = "round", border = true, borderStyle = "flat", borderMode = "class", borderSize = 2,
+		local LOOK = { shape = "round", border = true, borderStyle = "soft", innerShade = true, borderMode = "class", borderSize = 2,
 			iconShadow = false, textBg = "none", textBgMode = "gold", textFont = "default", textUpper = false,
 			textMode = "class", textPos = "below", textShadow = true }
 		local function Look(changes)
@@ -1496,12 +1538,14 @@ do
 		y = 0
 		Heading(page, "Border", COL3, y)
 		Gate(AddCheck(page, "Show a border", "border", COL3, y - 24), On)
+		Gate(AddCheck(page, "Inner shade", "innerShade", COL3 + 190, y - 24,
+			"A soft dark edge inside the icon that gives it depth."), On)
 		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "gold", "Gold" }, { "enemy", "Enemy red" },
 			{ "custom", "Custom color" } }, COL3, y - 50).button, BorderOn)
 		Gate(AddSwatch(page, "Custom color", "borderColor", COL3 + 214, y - 68),
 			function() return BorderOn() and db.borderMode == "custom" end)
-		Gate(AddDropdown(page, "Border style", "borderStyle", { { "flat", "Flat color" }, { "metal", "Metal shine" } }, COL3, y - 98,
-			"Metal shine: a light-dark-light shine tinted with the border color (gold looks like polished metal).").button, BorderOn)
+		Gate(AddDropdown(page, "Border style", "borderStyle", { { "soft", "Soft glow" }, { "flat", "Flat color" }, { "metal", "Metal shine" } }, COL3, y - 98,
+			"Soft glow: the border plus a soft glow of its color. Flat: a plain line. Metal shine: a light-dark-light shine tinted with the border color (gold looks like polished metal).").button, BorderOn)
 		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL3, y - 146).slider, BorderOn)
 
 		y = y - 208
