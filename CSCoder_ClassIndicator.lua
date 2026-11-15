@@ -265,6 +265,8 @@ local SHAPES = {
 function Indicator.New(parent)
 	local f = CreateFrame("Frame", nil, parent)
 	f:SetSize(28, 28)
+	-- Never off screen: a nameplate near the top edge pushed the icon out of sight.
+	f:SetClampedToScreen(true)
 	f.icon = f:CreateTexture(nil, "ARTWORK")
 	f.ring = f:CreateTexture(nil, "BORDER")
 	f.ring:SetAllPoints()
