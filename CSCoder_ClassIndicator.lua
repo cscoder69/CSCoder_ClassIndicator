@@ -1824,6 +1824,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 			CSCoderMinimap.Register({
 				name = SUBTITLE,
 				open = function() OpenOptions(true) end,
+				icon = CLASS_TEXTURE, iconCoords = { 0.0175, 0.2325, 0.0175, 0.2325 }, -- the Warrior shield
 				rightClick = function()
 					db.enabled = not db.enabled
 					print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
