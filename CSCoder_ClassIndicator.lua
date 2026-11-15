@@ -69,7 +69,6 @@ local SETTINGS_VERSION = 2
 -- Dev copy only: settings forced on every load (to try a configuration with just a /reload).
 -- Empty in releases (the packaged copy never applies it anyway).
 local DEV_OVERRIDES = {
-	showText = true, textBg = "none", -- test 4: no pixel snapping on every piece (border, text)
 }
 
 local db

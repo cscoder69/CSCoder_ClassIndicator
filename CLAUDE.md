@@ -97,6 +97,7 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   more: menu (right-click a row = its action). Angle saved by every addon (`root.minimapAngle`).
   Option "Minimap button" (`minimap`) in Display.
 - (REVERTED 2026-11-14: trilinear filtering and no-snap made the art shimmer on moving plates — the user's "flicker". Default filtering and snapping again; the indicator is parented to the bar it sits on.)
+- FLICKER FIX (2026-11-14, confirmed by the user): no pixel snapping on EVERY piece (icon, masks, ring, edges, text, badge, plate, healer). With snapping, each edge of a thin line rounded on its own while the plate moved by fractions of a pixel, so the border/outline grew and shrank a pixel per frame. Indicator parented to the bar it sits on. Dev copy: test mode on at load + DEV_OVERRIDES (keep empty when done).
 - Polish from studying BlitzFramesTwoForever (2026-11-14; techniques only, our own art):
   NO SetSnapToPixelGrid(false): the icon then slid smoothly while the text moved in 1 px steps
   (the class name "shook" on moving targets, user 2026-11-14). Everything snaps together.
