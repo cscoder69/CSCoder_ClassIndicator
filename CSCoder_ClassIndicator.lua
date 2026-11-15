@@ -2063,6 +2063,14 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 		Show("concat secret", function() local _, c = UnitClass(unit); return "x" .. c end)
 		if GetNumBattlefieldScores then Show("scores", GetNumBattlefieldScores) end
 		if GetBattlefieldScore then Show("score 1", GetBattlefieldScore, 1) end
+		Score.Refresh()
+		local known = 0
+		for _ in pairs(Score.byName) do known = known + 1 end
+		Show("scoreboard names known", function() return known end)
+		Show("found for target", function() local e = Score.Find(unit); return e and e.class, e and e.faction end)
+		Show("wanted", function() return UnitWanted(unit) end)
+		local plate = C_NamePlate.GetNamePlateForUnit(unit)
+		Show("our indicator", function() local f = plate and plate.cciIndicator; return f ~= nil, f and f:IsShown(), f and f.lastClass end)
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and T("on") or T("off")))
