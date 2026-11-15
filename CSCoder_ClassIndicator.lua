@@ -69,6 +69,7 @@ local SETTINGS_VERSION = 2
 -- Dev copy only: settings forced on every load (to try a configuration with just a /reload).
 -- Empty in releases (the packaged copy never applies it anyway).
 local DEV_OVERRIDES = {
+	showText = true, textBg = "none", -- test 4: no pixel snapping on every piece (border, text)
 }
 
 local db
@@ -330,6 +331,20 @@ function Indicator.New(parent)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
+	-- Nameplates move by fractions of a pixel. With pixel snapping each edge of a thin line (the
+	-- 1-2 px border, the badge edge, the text outline) rounds on its own, so lines grew and
+	-- shrank by a pixel from frame to frame: the "flicker". Every piece is drawn without
+	-- snapping, so thicknesses stay constant.
+	local function NoSnap(region)
+		if region and region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, false) end
+		if region and region.SetTexelSnappingBias then pcall(region.SetTexelSnappingBias, region, 0) end
+	end
+	for _, region in ipairs({ f.icon, f.iconMask, f.ring, f.holeMask, f.shade, f.shadow, f.glow, f.borderGlow,
+		f.text, bg.fill, bg.tip }) do NoSnap(region) end
+	for _, list in ipairs({ f.edges, bg.edges, healer.parts }) do
+		for _, region in ipairs(list) do NoSnap(region) end
+	end
+	for _, piece in pairs(badge.pieces) do NoSnap(piece) end
 	f:Hide()
 	return f
 end
