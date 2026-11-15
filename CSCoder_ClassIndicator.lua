@@ -1809,6 +1809,17 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 			if f and f:IsShown() then if Lock.frames[f] then locked = locked + 1 else plain = plain + 1 end end
 		end
 		print(string.format("|cffffd200%s|r: pixel lock on %d indicator(s), plain anchoring on %d", TITLE, locked, plain))
+		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+			local f = plate.cciIndicator
+			if f and f.lockTarget then
+				local ok, a, b, c, d = pcall(f.lockTarget.GetRect, f.lockTarget)
+				print("  bar GetRect: ok=" .. tostring(ok) .. " -> " .. tostring(a) .. ", " .. tostring(b) .. ", " .. tostring(c) .. ", " .. tostring(d))
+				local okP, pa = pcall(plate.GetRect, plate)
+				print("  plate GetRect: ok=" .. tostring(okP) .. " -> " .. tostring(pa))
+				print("  text can turn snapping off: " .. tostring(f.text.SetSnapToPixelGrid ~= nil) .. ", texture: " .. tostring(f.icon.SetSnapToPixelGrid ~= nil))
+				break
+			end
+		end
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
 		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
