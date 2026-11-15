@@ -6,4 +6,5 @@
 ## SavedVariables: CSCoderClassIndicatorDB
 
 CSCoderMinimap.lua
+Locales.lua
 CSCoder_ClassIndicator.lua

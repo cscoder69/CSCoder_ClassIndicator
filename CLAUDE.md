@@ -113,3 +113,13 @@ lines. The addon never touches click areas or targeting. Do not bring it back.
   So: pixel-perfect scale + snapping on everywhere + whole-pixel widths and top-corner placement
   (text, plate, badge). Lock (measure every frame) stays as code but turns itself off after the
   first refusal (`Lock.refused`). `/ci lock` shows the status.
+
+## Options v2 + translations (2026-11-14, user: "organize like Quest Indicator, translations, nothing extra or missing")
+- Settings tab = fixed preview on top + ONE scrolling page of sections (General, Icon, Border,
+  Class name, Name background, PvP), two columns (A=12, B=510), each with "Reset section" (its keys
+  back to DEFAULTS). Plain wheel scrolls; Shift+wheel steps a slider (`scrollFrame`).
+- Translations: `T("English text")`; `Locales.lua` = ns.LOCALES[code][english] for ptBR, esES,
+  deDE, frFR, itIT (esMX -> esES, ptPT -> ptBR). Language in General (`root.language`, "auto" =
+  game). A language change rebuilds the window (`RebuildWindow`). Check: `luajit
+  tools/check_translations.lua .` (missing / unused / placeholders, exit 1 on problems).
+- Toc order: CSCoderMinimap.lua, Locales.lua, CSCoder_ClassIndicator.lua. The mock runs in ptBR.

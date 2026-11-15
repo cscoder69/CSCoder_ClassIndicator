@@ -10,7 +10,7 @@ end
 
 -- Catch-all widget: unknown methods do nothing; Create*/Get* of objects return new widgets.
 local Widget = {}
-local NUMBERS = { GetStringHeight = 12, GetEffectiveScale = 0.64, GetFrameLevel = 1, GetStringWidth = 50, GetValue = 0, GetWidth = 100, GetHeight = 20, GetAlpha = 1 }
+local NUMBERS = { GetVerticalScroll = 0, GetVerticalScrollRange = 300, GetStringHeight = 12, GetEffectiveScale = 0.64, GetFrameLevel = 1, GetStringWidth = 50, GetValue = 0, GetWidth = 100, GetHeight = 20, GetAlpha = 1 }
 local function NewWidget(kind)
 	local w = { _kind = kind, _scripts = {}, _shown = true, _points = 0 }
 	return setmetatable(w, Widget)
@@ -66,6 +66,9 @@ env.Settings = {
 	RegisterCanvasLayoutSubcategory = function() return {} end,
 }
 env.HideUIPanel = function() end
+env.GetLocale = function() return "ptBR" end
+env.IsShiftKeyDown = function() return false end
+env.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 env.GetPhysicalScreenSize = function() return 2560, 1440 end
 env.StaticPopupDialogs = {}
 env.StaticPopup_Show = function(name, a, b, data) env._popup = { name = name, data = data } end
@@ -112,9 +115,11 @@ env.UnitClass = function(u) local d = units[u]; if d then return d.name, d.class
 env.Minimap = NewWidget("Minimap")
 env.GetCursorPosition = function() return 0, 0 end
 local shared = assert(loadfile(dir .. "/CSCoderMinimap.lua")); setfenv(shared, env); try("shared minimap", shared)
+local ns = {}
+local locales = assert(loadfile(dir .. "/Locales.lua")); setfenv(locales, env); try("locales", locales, "CSCoder_ClassIndicator", ns)
 local chunk = assert(loadfile(dir .. "/CSCoder_ClassIndicator.lua"))
 setfenv(chunk, env)
-try("load", chunk, "CSCoder_ClassIndicator")
+try("load", chunk, "CSCoder_ClassIndicator", ns)
 local events
 -- The events frame is the last CreateFrame with an OnEvent script: find it through ADDON_LOADED.
 for k, v in pairs(env) do end
@@ -129,7 +134,7 @@ env.CreateFrame = function(...) local w = create(...); frames[#frames + 1] = w; 
 env.CSCoderClassIndicatorDB = nil
 chunk = assert(loadfile(dir .. "/CSCoder_ClassIndicator.lua"))
 setfenv(chunk, env)
-try("load", chunk, "CSCoder_ClassIndicator")
+try("load", chunk, "CSCoder_ClassIndicator", ns)
 for _, f in ipairs(frames) do if f._scripts.OnEvent then events = f end end
 local function Fire(event, ...) try(event, events._scripts.OnEvent, events, event, ...) end
 
@@ -238,8 +243,8 @@ local share
 for _, f in ipairs(frames) do if f._name == "CSCoder_ClassIndicatorShare" then share = f end end
 local exportButton, importButton
 for _, f in ipairs(frames) do
-	if f.label and f.label._text == "Export profile" then exportButton = f end
-	if f.label and f.label._text == "Import profile" then importButton = f end
+	if f.label and (f.label._text == "Export profile" or f.label._text == "Exportar perfil") then exportButton = f end
+	if f.label and (f.label._text == "Import profile" or f.label._text == "Importar perfil") then importButton = f end
 end
 try("export", exportButton._scripts.OnClick, exportButton)
 for _, f in ipairs(frames) do if f._name == "CSCoder_ClassIndicatorShare" then share = f end end
@@ -256,7 +261,7 @@ print("garbage refused, size kept", db.size == 37)
 -- Old flat save migrates into Default.
 env.CSCoderClassIndicatorDB = { enabled = true, size = 40, shape = "square", version = 1 }
 frames = {}
-chunk = assert(loadfile(dir .. "/CSCoder_ClassIndicator.lua")); setfenv(chunk, env); try("reload", chunk, "CSCoder_ClassIndicator")
+chunk = assert(loadfile(dir .. "/CSCoder_ClassIndicator.lua")); setfenv(chunk, env); try("reload", chunk, "CSCoder_ClassIndicator", ns)
 for _, f in ipairs(frames) do if f._scripts.OnEvent then events = f end end
 Fire("ADDON_LOADED", "CSCoder_ClassIndicator")
 local r2 = env.CSCoderClassIndicatorDB
@@ -279,7 +284,7 @@ print("errors after minimap:", errors)
 try("open options again", env.SlashCmdList.CSCODERCLASSINDICATOR, "")
 local picks = 0
 for _, f in ipairs(frames) do
-	if f.label and f.label._text == "Pick..." and f._scripts.OnClick then
+	if f.label and (f.label._text == "Pick..." or f.label._text == "Escolher...") and f._scripts.OnClick then
 		try("pick open", f._scripts.OnClick, f); picks = picks + 1
 		local p = env.CSCoder_ClassIndicatorPicker
 		if p and p.tiles and p.tiles[2] then try("pick tile", p.tiles[2]._scripts.OnClick, p.tiles[2]) end

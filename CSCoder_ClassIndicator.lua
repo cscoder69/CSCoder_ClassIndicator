@@ -3,7 +3,7 @@
 -- class reads at a glance without relying on colour. Anchored to the game's own nameplate frame,
 -- so it works with the default UI and with nameplate addons (Plater, Kui, ThreatPlates, ElvUI...).
 
-local ADDON = ...
+local ADDON, ns = ...
 local TITLE = "CS.Coder - Class Indicator"
 local SUBTITLE = "Class Indicator"
 local PARENT_NAME = "CS.Coder"
@@ -145,6 +145,24 @@ function Profiles.Delete(name)
 		if profile == name then root.chars[char] = "Default" end
 	end
 	return true
+end
+
+---------------------------------------------------------------------------------------------
+-- Translations: the English text is the key; Locales.lua holds the other languages
+-- (ns.LOCALES[code][english] = translation). Missing text falls back to English.
+---------------------------------------------------------------------------------------------
+
+local Translations = { lang = {} }
+local function T(text) return Translations.lang[text] or text end
+function Translations.Load()
+	local code = root and root.language
+	if not code or code == "auto" then code = GetLocale() end
+	if code == "esMX" then code = "esES" elseif code == "ptPT" then code = "ptBR" end
+	Translations.lang = (ns and ns.LOCALES and ns.LOCALES[code]) or {}
+end
+function Translations.Choices()
+	return { { "auto", T("Game language") }, { "enUS", "English" }, { "ptBR", "Português" }, { "esES", "Español" },
+		{ "deDE", "Deutsch" }, { "frFR", "Français" }, { "itIT", "Italiano" } }
 end
 
 ---------------------------------------------------------------------------------------------
@@ -852,8 +870,8 @@ end
 
 local function SetTestMode(on)
 	testMode = on
-	print(string.format("|cffffd200%s|r: test mode %s", TITLE,
-		on and "|cff00ff00ON|r (every nameplate gets a sample class)" or "|cffff4040OFF|r"))
+	print(string.format("|cffffd200%s|r: %s", TITLE, on and ("|cff00ff00" .. T("Test mode ON") .. "|r " .. T("(every nameplate gets a sample class)"))
+		or ("|cffff4040" .. T("Test mode OFF") .. "|r")))
 	Changed()
 end
 
@@ -865,6 +883,7 @@ local OpenOptions
 do
 	local GOLD = { 1, 0.82, 0 }
 	local window, refreshers, list = nil, {}, nil
+	local scrollFrame -- the Settings page (sliders pass the plain mouse wheel to it)
 	local COL1, COL2, COL3, CONTROL_W = 24, 370, 716, 200
 
 	local function Edges(frame, r, g, b, a)
@@ -1003,7 +1022,13 @@ do
 		box:SetScript("OnEscapePressed", function(self) Show(db[key]); self:ClearFocus() end)
 		s:EnableMouseWheel(true)
 		s:SetScript("OnMouseWheel", function(_, delta)
-			s:SetValue(math.max(low, math.min(high, db[key] + delta * step)))
+			-- Shift + wheel steps the slider; the plain wheel scrolls the page (like Quest Indicator).
+			if IsShiftKeyDown() or not scrollFrame then
+				s:SetValue(math.max(low, math.min(high, db[key] + delta * step)))
+			else
+				local range = scrollFrame:GetVerticalScrollRange()
+				scrollFrame:SetVerticalScroll(math.max(0, math.min(range, scrollFrame:GetVerticalScroll() - delta * 40)))
+			end
 		end)
 		Tooltip(s, tip)
 		refreshers[#refreshers + 1] = function()
@@ -1132,9 +1157,9 @@ do
 		Edges(box, GOLD[1], GOLD[2], GOLD[3], 0.35)
 		local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 		hint:SetPoint("BOTTOMRIGHT", -8, 6)
-		hint:SetText("Preview - /ci test shows it on real nameplates")
+		hint:SetText(T("Preview - /ci test shows it on real nameplates"))
 		local samples = { "WARRIOR", "HUNTER", "MAGE", "ROGUE", "PRIEST" }
-		local names = { "Grommash", "Thornshot", "Aetheris (target)", "Shade", "Lightwell" }
+		local names = { "Grommash", "Thornshot", T("Aetheris (target)"), "Shade", "Lightwell" }
 		local plates = {}
 		for i, class in ipairs(samples) do
 			local bar = CreateFrame("Frame", nil, box)
@@ -1290,33 +1315,33 @@ do
 			box:SetScript("OnEscapePressed", function() s:Hide() end)
 			scroll:SetScrollChild(box)
 			s.box = box
-			local close = Button(s, "Close", 100)
+			local close = Button(s, T("Close"), 100)
 			close:SetPoint("BOTTOMRIGHT", -16, 14)
 			close:SetScript("OnClick", function() s:Hide() end)
-			s.import = Button(s, "Import", 100)
+			s.import = Button(s, T("Import"), 100)
 			s.import:SetPoint("RIGHT", close, "LEFT", -8, 0)
 			s.import:SetScript("OnClick", function()
 				local count = Share.Decode(box:GetText())
 				if count then
 					FillDefaults(db)
 					Changed()
-					print(string.format("|cffffd200%s|r: %d settings imported into \"%s\".", TITLE, count, Profiles.Current()))
+					print(string.format("|cffffd200%s|r: " .. T("%d settings imported into \"%s\"."), TITLE, count, Profiles.Current()))
 					s:Hide()
 				else
-					s.hint:SetText("|cffff5050That text isn't a Class Indicator profile (it starts with CCI1:).|r")
+					s.hint:SetText(T("|cffff5050That text isn't a Class Indicator profile (it starts with CCI1:).|r"))
 				end
 			end)
 			shareWindow = s
 		end
 		local s = shareWindow
 		if mode == "export" then
-			s.title:SetText("Export profile")
-			s.hint:SetText("Press Ctrl+C to copy this text, then send it to a friend or paste it on another PC.")
+			s.title:SetText(T("Export profile"))
+			s.hint:SetText(T("Press Ctrl+C to copy this text, then send it to a friend or paste it on another PC."))
 			s.box:SetText(Share.Encode())
 			s.import:Hide()
 		else
-			s.title:SetText("Import profile")
-			s.hint:SetText("Paste a profile text (Ctrl+V) and click Import. It replaces the current profile's settings.")
+			s.title:SetText(T("Import profile"))
+			s.hint:SetText(T("Paste a profile text (Ctrl+V) and click Import. It replaces the current profile's settings."))
 			s.box:SetText("")
 			s.import:Show()
 		end
@@ -1341,7 +1366,7 @@ do
 			for _, name in ipairs(Profiles.Names()) do
 				if name ~= Profiles.Current() then list[#list + 1] = { name, name } end
 			end
-			if #list == 0 then list[1] = { "", "(no other profile)" } end
+			if #list == 0 then list[1] = { "", T("(no other profile)") } end
 			return list
 		end
 		local function All()
@@ -1351,18 +1376,18 @@ do
 		end
 		local function Nothing() return "" end
 
-		Desc("Profiles let each character have its own settings.", TOP)
+		Desc(T("Profiles let each character have its own settings."), TOP)
 
-		Desc("Put the current profile back to its default settings.", TOP - 24)
-		local reset = Button(tab, "Reset Profile", 160)
+		Desc(T("Put the current profile back to its default settings."), TOP - 24)
+		local reset = Button(tab, T("Reset Profile"), 160)
 		reset:SetPoint("TOPLEFT", LEFT, TOP - 42)
 		reset:SetScript("OnClick", function() ResetSettings(); Changed() end)
 
 		local current = tab:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 		current:SetPoint("TOPLEFT", LEFT, TOP - 80)
 
-		Desc("Create a new profile by typing a name, or pick an existing one.", TOP - 106)
-		Label(tab, "New", LEFT, TOP - 126)
+		Desc(T("Create a new profile by typing a name, or pick an existing one."), TOP - 106)
+		Label(tab, T("New"), LEFT, TOP - 126)
 		local input = CreateFrame("EditBox", nil, tab, "InputBoxTemplate")
 		input:SetSize(200, 22)
 		input:SetPoint("TOPLEFT", LEFT + 6, TOP - 144)
@@ -1377,19 +1402,19 @@ do
 			Profiles.Use(name)
 			Changed()
 		end)
-		AddDropdown(tab, "Existing Profiles", { get = Profiles.Current, set = function(name) Profiles.Use(name) end },
+		AddDropdown(tab, T("Existing Profiles"), { get = Profiles.Current, set = function(name) Profiles.Use(name) end },
 			All, LEFT + 294, TOP - 126)
 
-		Desc("Copy the settings of another profile into the current one.", TOP - 186)
-		AddDropdown(tab, "Copy From", { get = Nothing, set = function(name)
+		Desc(T("Copy the settings of another profile into the current one."), TOP - 186)
+		AddDropdown(tab, T("Copy From"), { get = Nothing, set = function(name)
 			if name ~= "" then Profiles.CopyFrom(name) end
 		end }, Others, LEFT + 4, TOP - 206)
 
-		Desc("Delete profiles you no longer use.", TOP - 266)
-		AddDropdown(tab, "Delete a Profile", { get = Nothing, set = function(name)
+		Desc(T("Delete profiles you no longer use."), TOP - 266)
+		AddDropdown(tab, T("Delete a Profile"), { get = Nothing, set = function(name)
 			if name == "" then return end
 			StaticPopupDialogs.CSCODER_CI_DELETE_PROFILE = {
-				text = "Delete the profile \"%s\"?", button1 = YES, button2 = NO,
+				text = T("Delete the profile \"%s\"?"), button1 = YES, button2 = NO,
 				OnAccept = function(_, data) Profiles.Delete(data); Changed() end,
 				timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
 			}
@@ -1397,20 +1422,20 @@ do
 		end }, function()
 			local list = {}
 			for _, option in ipairs(Others()) do if option[1] ~= "Default" then list[#list + 1] = option end end
-			if #list == 0 then list[1] = { "", "(nothing to delete)" } end
+			if #list == 0 then list[1] = { "", T("(nothing to delete)") } end
 			return list
 		end, LEFT + 4, TOP - 286)
 
-		Desc("Share the current profile: export it as text, or import a text someone sent you.", TOP - 346)
-		local export = Button(tab, "Export profile", 160)
+		Desc(T("Share the current profile: export it as text, or import a text someone sent you."), TOP - 346)
+		local export = Button(tab, T("Export profile"), 160)
 		export:SetPoint("TOPLEFT", LEFT, TOP - 366)
 		export:SetScript("OnClick", function() OpenShare("export") end)
-		local import = Button(tab, "Import profile", 160)
+		local import = Button(tab, T("Import profile"), 160)
 		import:SetPoint("LEFT", export, "RIGHT", 8, 0)
 		import:SetScript("OnClick", function() OpenShare("import") end)
 
 		local function Sync()
-			current:SetText("Current Profile: |cffffffff" .. tostring(Profiles.Current()) .. "|r")
+			current:SetText(T("Current Profile:") .. " |cffffffff" .. tostring(Profiles.Current()) .. "|r")
 		end
 		refreshers[#refreshers + 1] = Sync
 		tab:HookScript("OnShow", Sync)
@@ -1503,7 +1528,7 @@ do
 	end
 	-- A small "Pick..." button beside a control.
 	local function PickButton(parent, x, y, onClick)
-		local b = Button(parent, "Pick...", 64)
+		local b = Button(parent, T("Pick..."), 64)
 		b:SetPoint("TOPLEFT", x, y)
 		b:SetScript("OnClick", onClick)
 		return b
@@ -1514,9 +1539,44 @@ do
 		if UpdatePreview then UpdatePreview() end
 	end
 
+	-- Quick styles: one click sets the look (shape, border, name background, font). Size,
+	-- position and the PvP options stay as they are.
+	local LOOK = { shape = "round", border = true, borderStyle = "frame", iconSheen = true, innerShade = true, borderMode = "class", borderSize = 2,
+		iconShadow = false, textBg = "none", textBgMode = "gold", textFont = "default", textUpper = false,
+		textMode = "class", textPos = "below", textShadow = true }
+	local function With(base, extra)
+		local t = {}
+		for k, v in pairs(base) do t[k] = v end
+		for k, v in pairs(extra) do t[k] = v end
+		return t
+	end
+	local BADGE = { textBg = "badge", textPos = "right", textMode = "white", textUpper = true, textFont = "serif" }
+	local function QuickStyles()
+		return {
+			{ "classic", T("Classic (round, name below)"), With(LOOK, {}) },
+			{ "ring", T("Ring + gold badge"), With(LOOK, With(BADGE, { borderSize = 2 })) },
+			{ "glow", T("Rounded + class badge"), With(LOOK, With(BADGE, { shape = "rounded", textBgMode = "class", iconShadow = true })) },
+			{ "hex", T("Gold hexagon"), With(LOOK, With(BADGE, { shape = "hex", borderStyle = "metal", borderMode = "gold", borderSize = 3 })) },
+			{ "shield", T("Shield + red badge"), With(LOOK, With(BADGE, { shape = "shield", borderStyle = "metal", borderMode = "gold", borderSize = 3, textBgMode = "enemy" })) },
+			{ "ribbon", T("Ribbon"), With(LOOK, With(BADGE, { textBg = "ribbon", textBgMode = "class", borderSize = 3 })) },
+			{ "minimal", T("Minimal (icon + shadow)"), With(LOOK, With(BADGE, { border = false, iconShadow = true, textBg = "none" })) },
+			{ "diamond", T("Gold diamond"), With(LOOK, With(BADGE, { shape = "diamond", borderStyle = "metal", borderMode = "gold", borderSize = 3, textBgMode = "class" })) },
+		}
+	end
+
+	-- Option lists (built when the window is built, so they follow the language).
+	local function Shapes()
+		return { { "round", T("Round") }, { "rounded", T("Rounded square") }, { "square", T("Square") },
+			{ "hex", T("Hexagon") }, { "diamond", T("Diamond") }, { "shield", T("Shield") } }
+	end
+	local function BackgroundStyles()
+		return { { "none", T("None") }, { "badge", T("Badge (pointed)") }, { "plate", T("Dark plate") }, { "ribbon", T("Ribbon") } }
+	end
+
+	local RebuildWindow -- defined after Build (a language change builds the window again)
 	local function Build()
 		window = CreateFrame("Frame", "CSCoder_ClassIndicatorConfig", UIParent)
-		window:SetSize(1060, 806)
+		window:SetSize(1060, 760)
 		window:SetPoint("CENTER")
 		window:SetFrameStrata("DIALOG")
 		window:SetMovable(true)
@@ -1558,7 +1618,7 @@ do
 				b.label:SetTextColor(on and 1 or 0.75, on and 0.9 or 0.7, on and 0.6 or 0.6)
 			end
 		end
-		for i, text in ipairs({ "Settings", "Profiles" }) do
+		for i, text in ipairs({ T("Settings"), T("Profiles") }) do
 			local b = Button(window, text, 110)
 			b:SetPoint("TOPLEFT", 330 + (i - 1) * 116, -12)
 			b.selected = b:CreateTexture(nil, "ARTWORK", nil, -1)
@@ -1567,178 +1627,218 @@ do
 			b:SetScript("OnClick", function() SelectTab(i) end)
 			tabButtons[i] = b
 		end
+		-- Test mode sits in the title bar: it is an action, not a setting.
+		local test = Button(window, T("Test mode"), 140)
+		test:SetPoint("TOPLEFT", 572, -12)
+		Tooltip(test, T("Puts a sample class on EVERY nameplate around you (mobs, NPCs, allies), so you can adjust it on real nameplates. Same as /ci test."))
+		test:SetScript("OnClick", function() SetTestMode(not testMode) end)
+		refreshers[#refreshers + 1] = function() test.label:SetText(testMode and T("Test mode: ON") or T("Test mode")) end
 
 		UpdatePreview = BuildPreview(settingsTab)
 		BuildProfilesTab(profilesTab)
 		SelectTab(1)
 
-		-- Quick styles: one click sets the look (shape, border, name background, font). Size,
-		-- position and the PvP options stay as they are.
-		local LOOK = { shape = "round", border = true, borderStyle = "frame", iconSheen = true, innerShade = true, borderMode = "class", borderSize = 2,
-			iconShadow = false, textBg = "none", textBgMode = "gold", textFont = "default", textUpper = false,
-			textMode = "class", textPos = "below", textShadow = true }
-		local function Look(changes)
-			local look = {}
-			for k, v in pairs(LOOK) do look[k] = v end
-			for k, v in pairs(changes) do look[k] = v end
-			return look
-		end
-		local BADGE = { textBg = "badge", textPos = "right", textMode = "white", textUpper = true, textFont = "serif" }
-		local function With(base, extra) local t = {} for k, v in pairs(base) do t[k] = v end for k, v in pairs(extra) do t[k] = v end return t end
-		local QUICK = {
-			{ "classic", "Classic (round, name below)", Look({}) },
-			{ "ring", "1 - Ring + gold badge", Look(With(BADGE, { borderSize = 2 })) },
-			{ "glow", "2 - Rounded + class badge", Look(With(BADGE, { shape = "rounded", textBgMode = "class", iconShadow = true })) },
-			{ "hex", "3 - Gold hexagon", Look(With(BADGE, { shape = "hex", borderStyle = "metal", borderMode = "gold", borderSize = 3 })) },
-			{ "shield", "4 - Shield + red badge", Look(With(BADGE, { shape = "shield", borderStyle = "metal", borderMode = "gold", borderSize = 3, textBgMode = "enemy" })) },
-			{ "ribbon", "5 - Ribbon", Look(With(BADGE, { textBg = "ribbon", textBgMode = "class", borderSize = 3 })) },
-			{ "minimal", "6 - Minimal (icon + shadow)", Look(With(BADGE, { border = false, iconShadow = true, textBg = "none" })) },
-			{ "diamond", "7 - Gold diamond", Look(With(BADGE, { shape = "diamond", borderStyle = "metal", borderMode = "gold", borderSize = 3, textBgMode = "class" })) },
-		}
-		local quickOptions = {}
-		for i, q in ipairs(QUICK) do quickOptions[i] = { q[1], q[2] } end
-		AddDropdown(settingsTab, "Quick style", { get = function() return "" end, set = function(key)
-			for _, q in ipairs(QUICK) do
-				if q[1] == key then for k, v in pairs(q[3]) do db[k] = v end end
-			end
-		end }, quickOptions, 28, -52, "Sets the whole look in one click (shape, border, name background, font). Size, position and PvP options are kept.")
-		PickButton(settingsTab, 234, -68, function()
-			OpenPicker("Quick style", QUICK, function() return false end,
-				function(choice) for k, v in pairs(choice[3]) do db[k] = v end end)
-		end)
-
-		local page = CreateFrame("Frame", nil, settingsTab)
-		page:SetPoint("TOPLEFT", 0, -224)
-		page:SetPoint("BOTTOMRIGHT")
+		-- One scrolling page of sections (like Quest Indicator), under the fixed preview.
+		local scroll = CreateFrame("ScrollFrame", nil, settingsTab, "UIPanelScrollFrameTemplate")
+		scroll:SetPoint("TOPLEFT", 16, -224)
+		scroll:SetPoint("BOTTOMRIGHT", -38, 34)
+		local page = CreateFrame("Frame", nil, scroll)
+		page:SetSize(990, 10)
+		scroll:SetScrollChild(page)
 		page:EnableMouse(true)
 		page:SetScript("OnMouseDown", CloseList)
+		scroll:HookScript("OnVerticalScroll", CloseList)
+		scrollFrame = scroll
+		local hint = settingsTab:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		hint:SetPoint("BOTTOMRIGHT", -40, 12)
+		hint:SetText(T("Mouse wheel scrolls the page. Shift + wheel steps a slider. Type a value and press Enter."))
+
+		local A, B = 12, 510 -- the two columns
+		local y = 0
+		-- A section: its heading across the page and a "Reset section" button for its keys.
+		local function Section(name, keys)
+			y = y - 14
+			local heading = page:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+			heading:SetPoint("TOPLEFT", A, y)
+			heading:SetText(name)
+			local line = page:CreateTexture(nil, "ARTWORK")
+			line:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.3)
+			line:SetHeight(1)
+			line:SetPoint("LEFT", heading, "RIGHT", 10, 0)
+			line:SetPoint("RIGHT", page, "RIGHT", -130, 0)
+			local reset = Button(page, T("Reset section"), 116)
+			reset:SetPoint("RIGHT", page, "TOPRIGHT", -4, y - 9)
+			reset:SetScript("OnClick", function()
+				for _, key in ipairs(keys) do db[key] = CopyValue(DEFAULTS[key]) end
+				Changed()
+			end)
+			y = y - 34
+		end
+		local function Row(height) local top = y; y = y - height; return top end
 
 		local function On() return db.enabled end
 		local function TextOn() return db.enabled and db.showText end
 		local function BorderOn() return db.enabled and db.border end
+		local function BgOn() return TextOn() and db.textBg ~= "none" end
+		local function HealerOn() return db.enabled and db.healerMark end
+		local COLOR_MODES = { { "class", T("Class color") }, { "gold", T("Gold") }, { "enemy", T("Enemy red") }, { "custom", T("Custom color") } }
 
-		-- Column 1: Display + Icon.
-		local y = 0
-		Heading(page, "Display", COL1, y)
-		AddCheck(page, "Enable", "enabled", COL1, y - 24, "Show class icons on nameplates.")
-		AddCheck(page, "Minimap button", "minimap", COL1 + 200, y - 24, "The CS.Coder button on the minimap (shared by every CS.Coder addon).")
-		Gate(AddCheck(page, "Also on friendly players", "friends", COL1, y - 50, "Show the icon on allies too (enemies always get it)."), On)
-		-- Test mode sits in the title bar: it is an action, not a setting.
-		local test = Button(window, "Test mode", 120)
-		test:SetPoint("TOPLEFT", 572, -12)
-		Tooltip(test, "Puts a sample class on EVERY nameplate around you (mobs, NPCs, allies), so you can adjust it on real nameplates. Same as /ci test.")
-		test:SetScript("OnClick", function() SetTestMode(not testMode) end)
-		refreshers[#refreshers + 1] = function() test.label:SetText(testMode and "Test mode: ON" or "Test mode") end
+		-- 1. General.
+		Section(T("General"), { "enabled", "friends", "minimap" })
+		local top = Row(30)
+		AddCheck(page, T("Enable"), "enabled", A, top, T("Show class icons on nameplates."))
+		AddCheck(page, T("Minimap button"), "minimap", B, top, T("The CS.Coder button on the minimap (shared by every CS.Coder addon)."))
+		top = Row(52)
+		Gate(AddCheck(page, T("Also on friendly players"), "friends", A, top, T("Show the icon on allies too (enemies always get it).")), On)
+		AddDropdown(page, T("Language"), { get = function() return root.language or "auto" end, set = function(code)
+			root.language = code
+			Translations.Load()
+			RebuildWindow()
+		end }, Translations.Choices(), B, top + 4, T("The language of this window. Class names follow the game's language."))
 
-		y = y - 86
-		Heading(page, "Icon", COL1, y)
-		Gate(AddDropdown(page, "Shape", "shape", { { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" }, { "hex", "Hexagon" }, { "diamond", "Diamond" }, { "shield", "Shield" } }, COL1, y - 22).button, On)
-		Gate(PickButton(page, COL1 + 206, y - 38, function()
-			local choices = {}
-			for i, o in ipairs({ { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" }, { "hex", "Hexagon" }, { "diamond", "Diamond" }, { "shield", "Shield" } }) do choices[i] = { o[1], o[2], { shape = o[1] } } end
-			OpenPicker("Icon shape", choices, function(c) return db.shape == c[1] end, function(c) db.shape = c[1] end)
+		-- 2. Icon.
+		Section(T("Icon"), { "shape", "spellIcons", "size", "alpha", "anchor", "offsetX", "offsetY", "iconShadow" })
+		top = Row(52)
+		local quick = QuickStyles()
+		local quickOptions = {}
+		for i, q in ipairs(quick) do quickOptions[i] = { q[1], q[2] } end
+		Gate(AddDropdown(page, T("Quick style"), { get = function() return "" end, set = function(key)
+			for _, q in ipairs(quick) do if q[1] == key then for k, v in pairs(q[3]) do db[k] = CopyValue(v) end end end
+		end }, quickOptions, A, top, T("Sets the whole look in one click (shape, border, name background, font). Size, position and PvP options are kept.")).button, On)
+		Gate(PickButton(page, A + 206, top - 16, function()
+			OpenPicker(T("Quick style"), quick, function() return false end,
+				function(choice) for k, v in pairs(choice[3]) do db[k] = CopyValue(v) end end)
 		end), On)
-		Gate(AddSlider(page, "Size", "size", 12, 128, 1, COL1, y - 70).slider, On)
-		Gate(AddDropdown(page, "Position on the nameplate", "anchor", { { "top", "Top" }, { "bottom", "Bottom" },
-			{ "left", "Left" }, { "right", "Right" } }, COL1, y - 114,
-			"Which side of the nameplate's health bar the icon sits on.").button, On)
-		Gate(AddSlider(page, "X (sideways)", "offsetX", -150, 150, 1, COL1, y - 162).slider, On)
-		Gate(AddSlider(page, "Y (distance)", "offsetY", -150, 150, 1, COL1, y - 206,
-			"Distance from the health bar. Raise it to clear the name text.").slider, On)
-		Gate(AddSlider(page, "Opacity", "alpha", 0.2, 1, 0.05, COL1, y - 250).slider, On)
-		Gate(AddCheck(page, "Shadow under the icon", "iconShadow", COL1, y - 298), On)
-		Gate(AddCheck(page, "Spellbook icon art", "spellIcons", COL1 + 180, y - 298,
-			"Uses the class icons of the spellbook (richer art) instead of the character-creation ones."), On)
-
-		-- Name background (under the class name).
-		local function BgOn() return db.enabled and db.showText and db.textBg ~= "none" end
-		Heading(page, "Name background", COL1, y - 330)
-		local BG_STYLES = { { "none", "None" }, { "badge", "Badge (pointed)" }, { "plate", "Dark plate" }, { "ribbon", "Ribbon" } }
-		Gate(PickButton(page, COL1 + 206, y - 368, function()
+		Gate(AddDropdown(page, T("Shape"), "shape", Shapes(), B, top).button, On)
+		Gate(PickButton(page, B + 206, top - 16, function()
 			local choices = {}
-			for i, o in ipairs(BG_STYLES) do choices[i] = { o[1], o[2], { textBg = o[1] } } end
-			OpenPicker("Name background", choices, function(c) return db.textBg == c[1] end, function(c) db.textBg = c[1] end)
-		end), function() return db.enabled and db.showText end)
-		Gate(AddDropdown(page, "Style", "textBg", BG_STYLES, COL1, y - 352,
-			"Badge: a dark plate with a colored edge and a pointed end, starting behind the icon. Plate: a simple dark box. Ribbon: a colored band with a notched end.").button,
-			function() return db.enabled and db.showText end)
-		Gate(AddDropdown(page, "Edge / ribbon color", "textBgMode", { { "gold", "Gold" }, { "class", "Class color" }, { "enemy", "Enemy red" },
-			{ "dark", "Dark" }, { "custom", "Custom color" } }, COL1, y - 400).button, BgOn)
-		Gate(AddDropdown(page, "Font", "textFont", { { "default", "Game default" }, { "serif", "Serif (quest text)" },
-			{ "friz", "Friz Quadrata" }, { "narrow", "Arial Narrow" }, { "skurri", "Skurri" } }, COL1, y - 448).button,
-			function() return db.enabled and db.showText end)
-		Gate(AddSwatch(page, "Custom color", "textBgColor", COL1 + 214, y - 418),
+			for i, o in ipairs(Shapes()) do choices[i] = { o[1], o[2], { shape = o[1] } } end
+			OpenPicker(T("Icon shape"), choices, function(c) return db.shape == c[1] end, function(c) db.shape = c[1] end)
+		end), On)
+		top = Row(48)
+		Gate(AddSlider(page, T("Size"), "size", 12, 128, 1, A, top).slider, On)
+		Gate(AddSlider(page, T("Opacity"), "alpha", 0.2, 1, 0.05, B, top).slider, On)
+		top = Row(52)
+		Gate(AddDropdown(page, T("Position on the nameplate"), "anchor", { { "top", T("Top") }, { "bottom", T("Bottom") },
+			{ "left", T("Left") }, { "right", T("Right") } }, A, top, T("Which side of the nameplate's health bar the icon sits on.")).button, On)
+		top = Row(48)
+		Gate(AddSlider(page, T("X (sideways)"), "offsetX", -150, 150, 1, A, top).slider, On)
+		Gate(AddSlider(page, T("Y (distance)"), "offsetY", -150, 150, 1, B, top, T("Distance from the health bar. Raise it to clear the name text.")).slider, On)
+		top = Row(30)
+		Gate(AddCheck(page, T("Shadow under the icon"), "iconShadow", A, top), On)
+		Gate(AddCheck(page, T("Spellbook icon art"), "spellIcons", B, top,
+			T("Uses the class icons of the spellbook (richer art) instead of the character-creation ones.")), On)
+
+		-- 3. Border.
+		Section(T("Border"), { "border", "innerShade", "borderStyle", "borderMode", "borderColor", "borderSize", "iconSheen" })
+		top = Row(30)
+		Gate(AddCheck(page, T("Show a border"), "border", A, top), On)
+		Gate(AddCheck(page, T("Inner shade"), "innerShade", B, top, T("A soft dark edge inside the icon that gives it depth.")), On)
+		top = Row(52)
+		Gate(AddDropdown(page, T("Border style"), "borderStyle", { { "frame", T("Soft frame") }, { "soft", T("Soft glow") },
+			{ "flat", T("Flat color") }, { "metal", T("Metal shine") } }, A, top,
+			T("Soft frame: a thin rim with a soft dark outline (the smoothest). Soft glow: the border plus a soft glow of its color. Flat: a plain line. Metal shine: a light-dark-light shine tinted with the border color.")).button, BorderOn)
+		Gate(AddDropdown(page, T("Border color"), "borderMode", COLOR_MODES, B, top).button, BorderOn)
+		Gate(AddSwatch(page, T("Custom color"), "borderColor", B + 214, top - 18),
+			function() return BorderOn() and db.borderMode == "custom" end)
+		top = Row(48)
+		Gate(AddSlider(page, T("Border thickness"), "borderSize", 1, 8, 1, A, top).slider, BorderOn)
+		Gate(AddCheck(page, T("Glass shine"), "iconSheen", B, top - 16, T("A soft glass reflection on the top half of the icon.")), On)
+
+		-- 4. Class name.
+		Section(T("Class name"), { "showText", "textUpper", "textFormat", "textFont", "textSize", "textOutline", "textShadow",
+			"textMode", "textColor", "textPos", "textX", "textY" })
+		top = Row(30)
+		Gate(AddCheck(page, T("Show the class name"), "showText", A, top), On)
+		Gate(AddCheck(page, T("Capital letters"), "textUpper", B, top), TextOn)
+		top = Row(52)
+		Gate(AddDropdown(page, T("Text"), "textFormat", { { "full", T("Full name (Hunter)") }, { "short", T("Short (HUN)") } },
+			A, top, T("Short names take less room when many players are close together.")).button, TextOn)
+		Gate(AddDropdown(page, T("Font"), "textFont", { { "default", T("Game default") }, { "serif", T("Serif (quest text)") },
+			{ "friz", "Friz Quadrata" }, { "narrow", "Arial Narrow" }, { "skurri", "Skurri" } }, B, top).button, TextOn)
+		top = Row(52)
+		Gate(AddSlider(page, T("Text size"), "textSize", 6, 40, 1, A, top).slider, TextOn)
+		Gate(AddDropdown(page, T("Outline"), "textOutline", { { "", T("None") }, { "OUTLINE", T("Outline") },
+			{ "THICKOUTLINE", T("Thick outline") } }, B, top).button, TextOn)
+		Gate(AddCheck(page, T("Shadow"), "textShadow", B + 214, top - 18), TextOn)
+		top = Row(52)
+		Gate(AddDropdown(page, T("Text color"), "textMode", { { "class", T("Class color") }, { "white", T("White") },
+			{ "enemy", T("Enemy red") }, { "custom", T("Custom color") } }, A, top).button, TextOn)
+		Gate(AddSwatch(page, T("Custom color"), "textColor", A + 214, top - 18),
+			function() return TextOn() and db.textMode == "custom" end)
+		Gate(AddDropdown(page, T("Text position"), "textPos", { { "below", T("Below the icon") }, { "above", T("Above the icon") },
+			{ "left", T("Left of the icon") }, { "right", T("Right of the icon") } }, B, top).button, TextOn)
+		top = Row(48)
+		Gate(AddSlider(page, T("Text X"), "textX", -100, 100, 1, A, top).slider, TextOn)
+		Gate(AddSlider(page, T("Text Y"), "textY", -100, 100, 1, B, top).slider, TextOn)
+
+		-- 5. Name background.
+		Section(T("Name background"), { "textBg", "textBgMode", "textBgColor" })
+		top = Row(52)
+		Gate(AddDropdown(page, T("Style"), "textBg", BackgroundStyles(), A, top,
+			T("Badge: a dark plate with a colored edge and a pointed end, starting behind the icon. Plate: a simple dark box. Ribbon: a colored band with a notched end.")).button, TextOn)
+		Gate(PickButton(page, A + 206, top - 16, function()
+			local choices = {}
+			for i, o in ipairs(BackgroundStyles()) do choices[i] = { o[1], o[2], { textBg = o[1] } } end
+			OpenPicker(T("Name background"), choices, function(c) return db.textBg == c[1] end, function(c) db.textBg = c[1] end)
+		end), TextOn)
+		Gate(AddDropdown(page, T("Edge / ribbon color"), "textBgMode", { { "gold", T("Gold") }, { "class", T("Class color") },
+			{ "enemy", T("Enemy red") }, { "dark", T("Dark") }, { "custom", T("Custom color") } }, B, top).button, BgOn)
+		Gate(AddSwatch(page, T("Custom color"), "textBgColor", B + 214, top - 18),
 			function() return BgOn() and db.textBgMode == "custom" end)
 
-		-- Column 2: Class name.
-		y = 0
-		Heading(page, "Class name", COL2, y)
-		Gate(AddCheck(page, "Show the class name", "showText", COL2, y - 24), On)
-		Gate(AddCheck(page, "Capital letters", "textUpper", COL2 + 180, y - 24), TextOn)
-		Gate(AddDropdown(page, "Text", "textFormat", { { "full", "Full name (Hunter)" }, { "short", "Short (HUN)" } },
-			COL2, y - 50, "Short names take less room when many players are close together.").button, TextOn)
-		Gate(AddDropdown(page, "Text position", "textPos", { { "below", "Below the icon" }, { "above", "Above the icon" },
-			{ "left", "Left of the icon" }, { "right", "Right of the icon" } }, COL2, y - 98).button, TextOn)
-		Gate(AddSlider(page, "Text X", "textX", -100, 100, 1, COL2, y - 146).slider, TextOn)
-		Gate(AddSlider(page, "Text Y", "textY", -100, 100, 1, COL2, y - 190).slider, TextOn)
-		Gate(AddSlider(page, "Text size", "textSize", 6, 40, 1, COL2, y - 234).slider, TextOn)
-		Gate(AddDropdown(page, "Text color", "textMode", { { "class", "Class color" }, { "white", "White" },
-			{ "enemy", "Enemy red" }, { "custom", "Custom color" } }, COL2, y - 278).button, TextOn)
-		Gate(AddSwatch(page, "Custom color", "textColor", COL2 + 214, y - 296),
-			function() return TextOn() and db.textMode == "custom" end)
-		Gate(AddDropdown(page, "Outline", "textOutline", { { "", "None" }, { "OUTLINE", "Outline" },
-			{ "THICKOUTLINE", "Thick outline" } }, COL2, y - 326).button, TextOn)
-		Gate(AddCheck(page, "Shadow", "textShadow", COL2 + 214, y - 344), TextOn)
-
-		-- Healer cross: where and how big (the switch and outline are in PvP).
-		local function HealerOn() return db.enabled and db.healerMark end
-		Heading(page, "Healer cross", COL2, y - 384)
-		Gate(AddDropdown(page, "Position", "healerPos", { { "topright", "Top right" }, { "topleft", "Top left" },
-			{ "bottomright", "Bottom right" }, { "bottomleft", "Bottom left" }, { "center", "Center" } }, COL2, y - 406).button, HealerOn)
-		Gate(AddSlider(page, "Size", "healerSize", 0.2, 1, 0.02, COL2 + 214, y - 406, nil, 70).slider, HealerOn)
-		Gate(AddSlider(page, "X", "healerX", -30, 30, 1, COL2, y - 454, nil, 110).slider, HealerOn)
-		Gate(AddSlider(page, "Y", "healerY", -30, 30, 1, COL2 + 180, y - 454, nil, 110).slider, HealerOn)
-
-		-- Column 3: Border + PvP.
-		y = 0
-		Heading(page, "Border", COL3, y)
-		Gate(AddCheck(page, "Show a border", "border", COL3, y - 24), On)
-		Gate(AddCheck(page, "Inner shade", "innerShade", COL3 + 190, y - 24,
-			"A soft dark edge inside the icon that gives it depth."), On)
-		Gate(AddDropdown(page, "Border color", "borderMode", { { "class", "Class color" }, { "gold", "Gold" }, { "enemy", "Enemy red" },
-			{ "custom", "Custom color" } }, COL3, y - 50).button, BorderOn)
-		Gate(AddSwatch(page, "Custom color", "borderColor", COL3 + 214, y - 68),
-			function() return BorderOn() and db.borderMode == "custom" end)
-		Gate(AddDropdown(page, "Border style", "borderStyle", { { "frame", "Soft frame" }, { "soft", "Soft glow" }, { "flat", "Flat color" }, { "metal", "Metal shine" } }, COL3, y - 98,
-			"Soft frame: a thin rim with a soft dark outline (the smoothest). Soft glow: the border plus a soft glow of its color. Flat: a plain line. Metal shine: a light-dark-light shine tinted with the border color (gold looks like polished metal).").button, BorderOn)
-		Gate(AddCheck(page, "Glass shine", "iconSheen", COL3 + 214, y - 116, "A soft glass reflection on the top half of the icon."), On)
-		Gate(AddSlider(page, "Border thickness", "borderSize", 1, 8, 1, COL3, y - 146).slider, BorderOn)
-
-		y = y - 208
-		Heading(page, "PvP", COL3, y)
-		Gate(AddCheck(page, "Mark healer classes", "healerMark", COL3, y - 24,
-			"A green cross on classes that can heal (Priest, Druid, Paladin, Shaman...). Usually the first one to kill."), On)
-		Gate(AddCheck(page, "Cross outline", "healerOutline", COL3 + 190, y - 24), function() return db.enabled and db.healerMark end)
-		Gate(AddCheck(page, "Bigger icon on your target", "targetBigger", COL3, y - 50), On)
-		Gate(AddSlider(page, "Target size", "targetScale", 1, 2, 0.05, COL3, y - 74).slider,
+		-- 6. PvP.
+		Section(T("PvP"), { "healerMark", "healerOutline", "healerPos", "healerSize", "healerX", "healerY",
+			"targetBigger", "targetScale", "targetGlow", "glowColor", "bigClasses", "bigScale" })
+		top = Row(30)
+		Gate(AddCheck(page, T("Mark healer classes"), "healerMark", A, top,
+			T("A green cross on classes that can heal (Priest, Druid, Paladin, Shaman...). Usually the first one to kill.")), On)
+		Gate(AddCheck(page, T("Cross outline"), "healerOutline", B, top), HealerOn)
+		top = Row(52)
+		Gate(AddDropdown(page, T("Cross position"), "healerPos", { { "topright", T("Top right") }, { "topleft", T("Top left") },
+			{ "bottomright", T("Bottom right") }, { "bottomleft", T("Bottom left") }, { "center", T("Center") } }, A, top).button, HealerOn)
+		Gate(AddSlider(page, T("Cross size"), "healerSize", 0.2, 1, 0.02, B, top).slider, HealerOn)
+		top = Row(48)
+		Gate(AddSlider(page, T("Cross X"), "healerX", -30, 30, 1, A, top).slider, HealerOn)
+		Gate(AddSlider(page, T("Cross Y"), "healerY", -30, 30, 1, B, top).slider, HealerOn)
+		top = Row(30)
+		Gate(AddCheck(page, T("Bigger icon on your target"), "targetBigger", A, top), On)
+		Gate(AddCheck(page, T("Glow on your target"), "targetGlow", B, top,
+			T("A pulsing glow around your current target's icon (only the icon, not the name).")), On)
+		Gate(AddSwatch(page, T("Glow color"), "glowColor", B + 214, top), function() return db.enabled and db.targetGlow end)
+		top = Row(48)
+		Gate(AddSlider(page, T("Target size"), "targetScale", 1, 2, 0.05, A, top).slider,
 			function() return db.enabled and db.targetBigger end)
-		for _, b in ipairs(AddClassPicker(page, "Classes shown bigger (click to pick)", COL3, y - 124,
-			"Click to show this class bigger.")) do
+		top = Row(56)
+		for _, b in ipairs(AddClassPicker(page, T("Classes shown bigger (click to pick)"), A, top, T("Click to show this class bigger."))) do
 			Gate(b, On)
 		end
-		Gate(AddSlider(page, "Bigger classes size", "bigScale", 1, 2, 0.05, COL3, y - 176).slider, On)
-		Gate(AddCheck(page, "Glow on your target", "targetGlow", COL3, y - 226,
-			"A pulsing glow around your current target's icon (only the icon, not the name)."), On)
-		Gate(AddSwatch(page, "Glow color", "glowColor", COL3 + 214, y - 226),
-			function() return db.enabled and db.targetGlow end)
+		Gate(AddSlider(page, T("Bigger classes size"), "bigScale", 1, 2, 0.05, B, top).slider, On)
 
-		local hint = page:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-		hint:SetPoint("TOPRIGHT", window, "TOPRIGHT", -44, -20)
-		hint:SetText("Wheel: step a slider. Type a value + Enter.")
+		page:SetHeight(-y + 20)
 
 		-- Every change refreshes the controls too (gates follow the switches).
-		local changed = Changed
-		Changed = function() changed(); for _, refresh in ipairs(refreshers) do refresh() end end
+		if not Indicator.changedWrapped then
+			Indicator.changedWrapped = true
+			local changed = Changed
+			Changed = function() changed(); for _, refresh in ipairs(refreshers) do refresh() end end
+		end
+	end
+
+	-- A new language: build the window again with the new texts (frames can't be destroyed,
+	-- the old one is hidden and dropped).
+	RebuildWindow = function()
+		local shown = window and window:IsShown()
+		if window then window:Hide() end
+		CloseList()
+		if list then list:Hide(); list = nil end
+		if picker then picker:Hide(); picker = nil end
+		wipe(refreshers)
+		window = nil
+		UpdatePreview = nil
+		Build()
+		window:Hide()
+		if shown then Refresh(); window:Show() end
 	end
 
 	function OpenOptions(toggle)
@@ -1764,7 +1864,7 @@ local function GetCSCoderParent()
 	header:SetText(PARENT_NAME)
 	local sub = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	sub:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
-	sub:SetText("Addons by CS.Coder. Pick one in the list on the left to change its settings.")
+	sub:SetText(T("Addons by CS.Coder. Pick one in the list on the left to change its settings."))
 	parent.frame = frame
 	if Settings and Settings.RegisterCanvasLayoutCategory then
 		parent.category = Settings.RegisterCanvasLayoutCategory(frame, PARENT_NAME)
@@ -1785,11 +1885,11 @@ local function BuildLanding()
 	text:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
 	text:SetWidth(560)
 	text:SetJustifyH("LEFT")
-	text:SetText("The official class icon and the class name above enemy players' nameplates. The settings open in their own window, with a live preview.")
+	text:SetText(T("The official class icon and the class name above enemy players' nameplates. The settings open in their own window, with a live preview."))
 	local open = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	open:SetSize(160, 24)
 	open:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -16)
-	open:SetText("Open settings")
+	open:SetText(T("Open settings"))
 	open:SetScript("OnClick", function()
 		if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
 		OpenOptions()
@@ -1810,6 +1910,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 		if arg1 ~= ADDON then return end
 		self:UnregisterEvent("ADDON_LOADED")
 		LoadSettings()
+		Translations.Load()
 		-- Dev copy (the source folder, version not filled by the packager): test mode on from the
 		-- start and DEV_OVERRIDES applied, so a /reload is enough to try a configuration.
 		local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version")
@@ -1827,10 +1928,10 @@ events:SetScript("OnEvent", function(self, event, arg1)
 				icon = CLASS_TEXTURE, iconCoords = { 0.0175, 0.2325, 0.0175, 0.2325 }, -- the Warrior shield
 				rightClick = function()
 					db.enabled = not db.enabled
-					print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
+					print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and T("on") or T("off")))
 					Changed()
 				end,
-				leftHint = "Left-click: options", rightHint = "Right-click: turn on / off",
+				leftHint = T("Left-click: options"), rightHint = T("Right-click: turn on / off"),
 				shown = function() return db.minimap end,
 				active = function() return db.enabled end,
 				getAngle = function() return root.minimapAngle end,
@@ -1882,7 +1983,7 @@ SlashCmdList.CSCODERCLASSINDICATOR = function(msg)
 		end
 	elseif msg == "toggle" then
 		db.enabled = not db.enabled
-		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and "on" or "off"))
+		print(string.format("|cffffd200%s|r: %s", TITLE, db.enabled and T("on") or T("off")))
 		Changed()
 	else
 		OpenOptions(true)
