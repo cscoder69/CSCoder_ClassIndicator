@@ -22,6 +22,7 @@ local DEFAULTS = {
 	enabled = true,
 	friends = false,       -- also on friendly players
 	minimap = true,        -- the shared CS.Coder minimap button
+	fixedScale = true,     -- keep the UI scale (nameplate distance scaling made the text shimmer)
 	shape = "round",       -- round | rounded (rounded square) | square | hex | diamond | shield
 	size = 28,
 	alpha = 1,
@@ -656,6 +657,13 @@ local function UpdateUnit(unit)
 	if not f then
 		f = Indicator.New(plate)
 		plate.cciIndicator = f
+	end
+	-- Fixed scale: nameplates grow and shrink with distance; following that, the text was
+	-- redrawn at a new fractional size every frame and shimmered. The indicator keeps the UI's
+	-- scale instead (same size as the rest of the interface).
+	if f.SetIgnoreParentScale then
+		f:SetIgnoreParentScale(db.fixedScale)
+		f:SetScale(db.fixedScale and UIParent:GetEffectiveScale() or 1)
 	end
 	-- Redraw only when something changed (class, target, options, the bar it sits on): the game
 	-- sends unit events all the time, and restyling on each one made the name flicker.
@@ -1464,6 +1472,8 @@ do
 		AddCheck(page, "Enable", "enabled", COL1, y - 24, "Show class icons on nameplates.")
 		Gate(AddCheck(page, "Also on friendly players", "friends", COL1, y - 50, "Show the icon on allies too (enemies always get it)."), On)
 		AddCheck(page, "Minimap button", "minimap", COL1 + 200, y - 50, "The CS.Coder button on the minimap (shared by every CS.Coder addon).")
+		Gate(AddCheck(page, "Fixed size", "fixedScale", COL1 + 200, y - 76,
+			"Keeps the icon and the name at the interface's size instead of growing and shrinking with the nameplate (that made the text shimmer)."), On)
 		local test = Button(page, "Test mode", 120)
 		test:SetPoint("TOPLEFT", COL1 + 200, y - 22)
 		Tooltip(test, "Puts a sample class on EVERY nameplate around you (mobs, NPCs, allies), so you can adjust it on real nameplates. Same as /ci test.")
@@ -1667,7 +1677,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
 			})
 		end
 		for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED" }) do
+			"UNIT_FACTION", "UNIT_FLAGS", "DUEL_FINISHED", "PLAYER_TARGET_CHANGED", "UI_SCALE_CHANGED" }) do
 			pcall(self.RegisterEvent, self, e)
 		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
