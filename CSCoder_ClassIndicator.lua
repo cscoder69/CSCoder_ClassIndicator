@@ -330,22 +330,27 @@ function Indicator.New(parent)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
-	-- Nameplates move by fractions of a pixel. With pixel snapping each edge of a thin line (the
-	-- 1-2 px border, the badge edge, the text outline) rounds on its own, so lines grew and
-	-- shrank by a pixel from frame to frame: the "flicker". Every piece is drawn without
-	-- snapping, so thicknesses stay constant.
-	local function NoSnap(region)
-		if region and region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, false) end
-		if region and region.SetTexelSnappingBias then pcall(region.SetTexelSnappingBias, region, 0) end
-	end
-	for _, region in ipairs({ f.icon, f.iconMask, f.ring, f.holeMask, f.shade, f.shadow, f.glow, f.borderGlow,
-		f.text, bg.fill, bg.tip }) do NoSnap(region) end
+	-- Every drawn piece, for Indicator.SetSnapping.
+	local regions = { f.icon, f.iconMask, f.ring, f.holeMask, f.shade, f.shadow, f.glow, f.borderGlow, f.text, bg.fill, bg.tip }
 	for _, list in ipairs({ f.edges, bg.edges, healer.parts }) do
-		for _, region in ipairs(list) do NoSnap(region) end
+		for _, region in ipairs(list) do regions[#regions + 1] = region end
 	end
-	for _, piece in pairs(badge.pieces) do NoSnap(piece) end
+	for _, piece in pairs(badge.pieces) do regions[#regions + 1] = piece end
+	f.regions = regions
 	f:Hide()
 	return f
+end
+
+-- Pixel snapping on or off for every piece. Off when the indicator rides on a nameplate that
+-- moves by fractions of a pixel (each edge of a thin line would round on its own: flicker);
+-- on when Lock keeps it on whole pixels (crisp and stable).
+function Indicator.SetSnapping(f, on)
+	if f.snapping == on then return end
+	f.snapping = on
+	for _, region in ipairs(f.regions) do
+		if region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, on) end
+		if region.SetTexelSnappingBias then pcall(region.SetTexelSnappingBias, region, on and 0.5 or 0) end
+	end
 end
 
 local function ModeColor(mode, custom, class)
@@ -626,6 +631,72 @@ function Indicator.Place(f, target)
 	else f:SetPoint("BOTTOM", target, "TOP", x, y) end
 end
 
+-- Pixel lock: the nameplate moves by fractions of a pixel, a different fraction every frame,
+-- and thin lines (border, badge edge, text outline) rounded differently each time: flicker.
+-- Instead of hanging the indicator on the bar, its spot is measured every frame and rounded
+-- to a WHOLE screen pixel, so its pieces land on exactly the same pixels while it moves.
+-- Falls back to plain anchoring (with snapping off) when the bar can't be measured.
+local Lock = { frames = {} }
+local function PixelSize()
+	local _, height = GetPhysicalScreenSize()
+	return (height and height > 0) and (768 / height) or 1
+end
+-- The indicator's anchor point and offsets from the screen's bottom-left, or nil.
+function Lock.Spot(f)
+	local target = f.lockTarget
+	if not target then return nil end
+	local ok, left, bottom, width, height = pcall(target.GetRect, target)
+	if not ok or type(left) ~= "number" or type(width) ~= "number" then return nil end
+	local s, fs = target:GetEffectiveScale(), f:GetEffectiveScale()
+	local side, x, y = db.anchor, db.offsetX, db.offsetY
+	local point, ax, ay
+	if side == "bottom" then point, ax, ay = "TOP", (left + width / 2) * s + x * fs, bottom * s - y * fs
+	elseif side == "left" then point, ax, ay = "RIGHT", left * s + (x - y) * fs, (bottom + height / 2) * s
+	elseif side == "right" then point, ax, ay = "LEFT", (left + width) * s + (x + y) * fs, (bottom + height / 2) * s
+	else point, ax, ay = "BOTTOM", (left + width / 2) * s + x * fs, (bottom + height) * s + y * fs end
+	local px = PixelSize()
+	ax = math.floor(ax / px + 0.5) * px
+	ay = math.floor(ay / px + 0.5) * px
+	return point, ax / fs, ay / fs
+end
+function Lock.Apply(f)
+	local point, x, y = Lock.Spot(f)
+	if not point then return false end
+	if f.lockPoint ~= point or f.lockX ~= x or f.lockY ~= y then
+		f.lockPoint, f.lockX, f.lockY = point, x, y
+		f:ClearAllPoints()
+		f:SetPoint(point, UIParent, "BOTTOMLEFT", x, y)
+	end
+	return true
+end
+-- Hang the indicator on its bar: locked to whole pixels when possible.
+function Lock.Attach(f, target)
+	f.lockTarget = target
+	f.lockPoint = nil
+	if Lock.Apply(f) then
+		Lock.frames[f] = true
+		Indicator.SetSnapping(f, true)
+		if not Lock.said and testMode then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock ON") end
+	else
+		Lock.frames[f] = nil
+		Indicator.Place(f, target)
+		Indicator.SetSnapping(f, false)
+		if not Lock.said and testMode then Lock.said = true; print("|cffffd200Class Indicator|r: pixel lock not possible here (bar can't be measured)") end
+	end
+end
+function Lock.Detach(f) Lock.frames[f] = nil end
+Lock.driver = CreateFrame("Frame")
+Lock.driver:SetScript("OnUpdate", function()
+	for f in pairs(Lock.frames) do
+		if f:IsVisible() and not Lock.Apply(f) then
+			-- Can't be measured any more: back to plain anchoring.
+			Lock.frames[f] = nil
+			Indicator.Place(f, f.lockTarget)
+			Indicator.SetSnapping(f, false)
+		end
+	end
+end)
+
 ---------------------------------------------------------------------------------------------
 -- Real nameplates
 ---------------------------------------------------------------------------------------------
@@ -651,7 +722,7 @@ local function UnitWanted(unit)
 end
 
 local function HidePlate(plate)
-	if plate and plate.cciIndicator then plate.cciIndicator:Hide() end
+	if plate and plate.cciIndicator then plate.cciIndicator:Hide(); Lock.Detach(plate.cciIndicator) end
 end
 
 local function UpdateUnit(unit)
@@ -692,7 +763,7 @@ local function UpdateUnit(unit)
 		f:SetFrameLevel(target:GetFrameLevel() + 20)
 	end)
 	if Indicator.Style(f, class, name, isTarget) then
-		Indicator.Place(f, target)
+		Lock.Attach(f, target)
 		f:Show()
 		f.lastClass, f.lastName, f.lastTarget, f.lastVersion, f.lastAnchor = class, name, isTarget, Indicator.version, target
 	end

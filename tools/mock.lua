@@ -31,6 +31,7 @@ Widget.__index = function(self, key)
 	if key == "SetText" then return function(s, v) s._text = v end end
 	if key == "GetText" then return function(s) return s._text or "" end end
 	if key == "GetFrameStrata" then return function() return "MEDIUM" end end
+	if key == "GetRect" then return function() return 100, 100, 120, 12 end end
 	if key == "IsForbidden" then return function() return false end end
 	if key == "GetName" then return function(s) return s._name end end
 	if key == "SetValue" then return function(s, v) s._value = v; if s._scripts.OnValueChanged then s._scripts.OnValueChanged(s, v) end end end
@@ -285,3 +286,10 @@ for _, f in ipairs(frames) do
 	end
 end
 print("pick buttons", picks, "errors after pickers:", errors)
+
+-- Pixel lock driver (every frame's OnUpdate runs once).
+local updates = 0
+for _, f in ipairs(frames) do
+	if f._scripts.OnUpdate then try("OnUpdate", f._scripts.OnUpdate, f, 0.016); updates = updates + 1 end
+end
+print("OnUpdate scripts run", updates, "errors after lock:", errors)
