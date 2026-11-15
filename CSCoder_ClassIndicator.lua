@@ -326,11 +326,6 @@ function Indicator.New(parent)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
-	-- No pixel snapping: smooth edges at any nameplate scale.
-	for _, t in ipairs({ f.icon, f.ring, f.shadow, f.glow, f.shade, f.borderGlow }) do
-		if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false) end
-		if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
-	end
 	f:Hide()
 	return f
 end
