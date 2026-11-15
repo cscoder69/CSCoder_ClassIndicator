@@ -327,6 +327,18 @@ function Indicator.New(parent)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
+	-- Smooth movement: nameplates move by fractions of a pixel. When each piece rounds its own
+	-- position (the default), the text slid 1 px against its ribbon from frame to frame. With
+	-- snapping off for EVERY piece (text included) they all move together as one.
+	local function NoSnap(region)
+		if region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, false) end
+		if region.SetTexelSnappingBias then pcall(region.SetTexelSnappingBias, region, 0) end
+	end
+	for _, region in ipairs({ f.icon, f.ring, f.shadow, f.glow, f.shade, f.borderGlow, f.text, bg.fill, bg.tip }) do NoSnap(region) end
+	for _, e in ipairs(f.edges) do NoSnap(e) end
+	for _, e in ipairs(bg.edges) do NoSnap(e) end
+	for _, piece in pairs(badge.pieces) do NoSnap(piece) end
+	for _, part in ipairs(healer.parts) do NoSnap(part) end
 	f:Hide()
 	return f
 end
