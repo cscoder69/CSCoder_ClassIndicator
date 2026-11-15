@@ -1597,7 +1597,7 @@ do
 			for i, o in ipairs({ { "round", "Round" }, { "rounded", "Rounded square" }, { "square", "Square" }, { "hex", "Hexagon" }, { "diamond", "Diamond" }, { "shield", "Shield" } }) do choices[i] = { o[1], o[2], { shape = o[1] } } end
 			OpenPicker("Icon shape", choices, function(c) return db.shape == c[1] end, function(c) db.shape = c[1] end)
 		end), On)
-		Gate(AddSlider(page, "Size", "size", 12, 64, 1, COL1, y - 70).slider, On)
+		Gate(AddSlider(page, "Size", "size", 12, 128, 1, COL1, y - 70).slider, On)
 		Gate(AddDropdown(page, "Position on the nameplate", "anchor", { { "top", "Top" }, { "bottom", "Bottom" },
 			{ "left", "Left" }, { "right", "Right" } }, COL1, y - 114,
 			"Which side of the nameplate's health bar the icon sits on.").button, On)
@@ -1640,7 +1640,7 @@ do
 			{ "left", "Left of the icon" }, { "right", "Right of the icon" } }, COL2, y - 98).button, TextOn)
 		Gate(AddSlider(page, "Text X", "textX", -100, 100, 1, COL2, y - 146).slider, TextOn)
 		Gate(AddSlider(page, "Text Y", "textY", -100, 100, 1, COL2, y - 190).slider, TextOn)
-		Gate(AddSlider(page, "Text size", "textSize", 6, 24, 1, COL2, y - 234).slider, TextOn)
+		Gate(AddSlider(page, "Text size", "textSize", 6, 40, 1, COL2, y - 234).slider, TextOn)
 		Gate(AddDropdown(page, "Text color", "textMode", { { "class", "Class color" }, { "white", "White" },
 			{ "enemy", "Enemy red" }, { "custom", "Custom color" } }, COL2, y - 278).button, TextOn)
 		Gate(AddSwatch(page, "Custom color", "textColor", COL2 + 214, y - 296),
