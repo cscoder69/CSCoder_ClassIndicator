@@ -1470,12 +1470,13 @@ do
 		local y = 0
 		Heading(page, "Display", COL1, y)
 		AddCheck(page, "Enable", "enabled", COL1, y - 24, "Show class icons on nameplates.")
+		AddCheck(page, "Minimap button", "minimap", COL1 + 200, y - 24, "The CS.Coder button on the minimap (shared by every CS.Coder addon).")
 		Gate(AddCheck(page, "Also on friendly players", "friends", COL1, y - 50, "Show the icon on allies too (enemies always get it)."), On)
-		AddCheck(page, "Minimap button", "minimap", COL1 + 200, y - 50, "The CS.Coder button on the minimap (shared by every CS.Coder addon).")
-		Gate(AddCheck(page, "Fixed size", "fixedScale", COL1 + 200, y - 76,
+		Gate(AddCheck(page, "Fixed size", "fixedScale", COL1 + 200, y - 50,
 			"Keeps the icon and the name at the interface's size instead of growing and shrinking with the nameplate (that made the text shimmer)."), On)
-		local test = Button(page, "Test mode", 120)
-		test:SetPoint("TOPLEFT", COL1 + 200, y - 22)
+		-- Test mode sits in the title bar: it is an action, not a setting.
+		local test = Button(window, "Test mode", 120)
+		test:SetPoint("TOPLEFT", 572, -12)
 		Tooltip(test, "Puts a sample class on EVERY nameplate around you (mobs, NPCs, allies), so you can adjust it on real nameplates. Same as /ci test.")
 		test:SetScript("OnClick", function() SetTestMode(not testMode) end)
 		refreshers[#refreshers + 1] = function() test.label:SetText(testMode and "Test mode: ON" or "Test mode") end
@@ -1583,7 +1584,7 @@ do
 
 		local hint = page:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 		hint:SetPoint("TOPRIGHT", window, "TOPRIGHT", -44, -20)
-		hint:SetText("Mouse wheel on a slider steps it. Type a value and press Enter.")
+		hint:SetText("Wheel: step a slider. Type a value + Enter.")
 
 		-- Every change refreshes the controls too (gates follow the switches).
 		local changed = Changed
