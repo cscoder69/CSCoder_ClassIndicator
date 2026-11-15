@@ -448,8 +448,21 @@ function Indicator.Style(f, class, name, isTarget)
 	bg.fill:ClearAllPoints()
 	bg.tip:ClearAllPoints()
 	if plate or ribbon then
-		bg.fill:SetPoint("TOPLEFT", text, "TOPLEFT", -padX, padY)
-		bg.fill:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", padX, -padY)
+		-- Beside the icon the background always starts at the icon's edge; above or below it
+		-- just wraps the text.
+		local pos = db.textPos
+		if pos == "right" then
+			bg.fill:SetPoint("LEFT", f, "RIGHT", 0, db.textY)
+			bg.fill:SetPoint("RIGHT", text, "RIGHT", padX, 0)
+			bg.fill:SetHeight(db.textSize + padY * 2)
+		elseif pos == "left" then
+			bg.fill:SetPoint("RIGHT", f, "LEFT", 0, db.textY)
+			bg.fill:SetPoint("LEFT", text, "LEFT", -padX, 0)
+			bg.fill:SetHeight(db.textSize + padY * 2)
+		else
+			bg.fill:SetPoint("TOPLEFT", text, "TOPLEFT", -padX, padY)
+			bg.fill:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", padX, -padY)
+		end
 	end
 	if plate then
 		bg.fill:SetVertexColor(0, 0, 0, 0.7)
