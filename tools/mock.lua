@@ -59,7 +59,7 @@ env.UISpecialFrames = {}
 env.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 env.SlashCmdList = {}
 env.C_Timer = { After = function(_, fn) fn() end }
-env.C_AddOns = { GetAddOnMetadata = function() return "@project-version@" end }
+env.C_AddOns = { GetAddOnMetadata = function() return "0.0.0-mock" end } -- like a release (no dev test mode)
 env.Settings = {
 	RegisterCanvasLayoutCategory = function() return {} end, RegisterAddOnCategory = function() end,
 	RegisterCanvasLayoutSubcategory = function() return {} end,
