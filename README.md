@@ -5,6 +5,8 @@ whether it's a Hunter, a Mage or a Warrior, without relying on colors.
 
 Made for **WoW Forever**. Works with the default nameplates and with nameplate addons such as Plater.
 
+![Every class at a glance](docs/screenshot_test.png)
+
 ## Features
 
 - **Official class icons** (character-creation or spellbook art) in six shapes: round, rounded square, square, hexagon, diamond, shield.
@@ -15,6 +17,8 @@ Made for **WoW Forever**. Works with the default nameplates and with nameplate a
 - **Profiles** per character, with export / import.
 - Shared **CS.Coder minimap button** (one button for every CS.Coder addon).
 - English, Português, Español, Deutsch, Français, Italiano.
+
+![Options window](docs/screenshot_options.png)
 
 ## Commands
 

@@ -54,11 +54,11 @@ Found a bug or have an idea? Open an issue on [GitHub](https://github.com/cscode
 
 ---
 
-## Screenshots to upload (Images tab)
+## Screenshots to upload (Images tab, in this order)
 
-Take them in game (see `screenshots.md`) and upload in this order:
-
-1. Enemy players with the class icons (badge style).
-2. The options window (Settings tab).
-3. The visual picker (Quick style).
-4. Test mode on a group of mobs.
+| File | Title | Description |
+|---|---|---|
+| `screenshot_test.png` | Every class at a glance | Official class icon, class name and a ribbon above each enemy player. |
+| `screenshot_world.png` | PvP helpers | Healer cross, bigger glowing icon on your target, any shape. |
+| `screenshot_options.png` | Options window | Sections with reset buttons, live preview, 6 languages. |
+| `screenshot_picker.png` | Quick styles | Eight ready-made looks, each drawn for real before you pick it. |
