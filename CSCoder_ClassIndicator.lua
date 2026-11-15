@@ -486,6 +486,7 @@ function Indicator.Style(f, class, name, isTarget)
 	local text, bg = f.text, f.textBg
 	local plate, ribbon, badgeOn = false, false, false
 	local textGap, textW = 0, 0 -- beside the icon: whole pixels from the icon's edge to the text, text width
+	local textH, textTop = 0, 0 -- text height (whole pixels) and its top, down from the icon's top
 	if db.showText and name then
 		if db.textFormat == "short" then name = SHORT_NAMES[class] or name end
 		local outline = db.textOutline
@@ -504,12 +505,16 @@ function Indicator.Style(f, class, name, isTarget)
 		text:SetTextColor(ModeColor(db.textMode, db.textColor, class))
 		text:ClearAllPoints()
 		local pos, x, y = db.textPos, db.textX, db.textY
+		textH = math.ceil(text:GetStringHeight() or db.textSize)
+		textTop = math.floor((size - textH) / 2)
 		-- With a background the text sits a little further out, so the plate clears the icon.
 		local pad = db.textBg ~= "none" and 4 or 0
 		if db.textBg == "badge" then pad = 3 end
 		if pos == "above" then text:SetPoint("BOTTOM", f, "TOP", x, 2 + pad * 2 + y)
-		elseif pos == "left" then text:SetPoint("RIGHT", f, "LEFT", -3 - pad * 2 + x, y)
-		elseif pos == "right" then text:SetPoint("LEFT", f, "RIGHT", 3 + pad * 2 + x, y)
+		-- Beside the icon: placed by its top corner at whole pixels (centring on the icon gave
+		-- half pixels, and the text rounded differently from its plate at some camera angles).
+		elseif pos == "left" then text:SetPoint("TOPRIGHT", f, "TOPLEFT", -3 - pad * 2 + x, -textTop + y)
+		elseif pos == "right" then text:SetPoint("TOPLEFT", f, "TOPRIGHT", 3 + pad * 2 + x, -textTop + y)
 		else text:SetPoint("TOP", f, "BOTTOM", x, -2 - pad * 2 + y) end
 		text:Show()
 		textGap = 3 + pad * 2 + (pos == "left" and -x or x)
@@ -531,12 +536,14 @@ function Indicator.Style(f, class, name, isTarget)
 		local pos = db.textPos
 		-- Whole-pixel widths (the text width rounded up), so every piece sits a whole number of
 		-- pixels from the icon and they all round the same way.
+		local plateH = db.textSize + padY * 2
+		local plateTop = textTop + math.floor((textH - plateH) / 2)
 		if pos == "right" then
-			bg.fill:SetPoint("LEFT", f, "RIGHT", 0, db.textY)
-			bg.fill:SetSize(textGap + textW + padX, db.textSize + padY * 2)
+			bg.fill:SetPoint("TOPLEFT", f, "TOPRIGHT", 0, -plateTop + db.textY)
+			bg.fill:SetSize(textGap + textW + padX, plateH)
 		elseif pos == "left" then
-			bg.fill:SetPoint("RIGHT", f, "LEFT", 0, db.textY)
-			bg.fill:SetSize(textGap + textW + padX, db.textSize + padY * 2)
+			bg.fill:SetPoint("TOPRIGHT", f, "TOPLEFT", 0, -plateTop + db.textY)
+			bg.fill:SetSize(textGap + textW + padX, plateH)
 		else
 			bg.fill:SetPoint("TOPLEFT", text, "TOPLEFT", -padX, padY)
 			bg.fill:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", padX, -padY)
@@ -586,11 +593,12 @@ function Indicator.Style(f, class, name, isTarget)
 		end
 		for _, t in ipairs({ p.midFill, p.midEdge }) do
 			local half = math.floor(size / 2)
+			local top = textTop + math.floor((textH - h) / 2)
 			if pos == "right" then
-				t:SetPoint("LEFT", f, "LEFT", half, db.textY)
+				t:SetPoint("TOPLEFT", f, "TOPLEFT", half, -top + db.textY)
 				t:SetWidth(size - half + textGap + textW + 4)
 			elseif pos == "left" then
-				t:SetPoint("RIGHT", f, "RIGHT", -half, db.textY)
+				t:SetPoint("TOPRIGHT", f, "TOPRIGHT", -half, -top + db.textY)
 				t:SetWidth(size - half + textGap + textW + 4)
 			else
 				t:SetPoint("LEFT", text, "LEFT", -4, 0)
