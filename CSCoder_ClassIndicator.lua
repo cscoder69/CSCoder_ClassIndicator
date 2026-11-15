@@ -337,6 +337,13 @@ function Indicator.New(parent)
 	f.borderGlow:SetPoint("CENTER")
 	f.borderGlow:SetBlendMode("ADD")
 	f.borderGlow:Hide()
+	-- The nameplate follows the unit's head and never stands still (sub-pixel bobbing). A masked
+	-- texture and its mask rounded their positions separately, so the art slid 1-2 px inside
+	-- its frame. The icon, its masks and the ring are drawn without pixel snapping, together.
+	for _, region in ipairs({ f.icon, f.iconMask, f.ring, f.holeMask, f.shade }) do
+		if region and region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, false) end
+		if region and region.SetTexelSnappingBias then pcall(region.SetTexelSnappingBias, region, 0) end
+	end
 	f:Hide()
 	return f
 end
