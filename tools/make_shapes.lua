@@ -77,8 +77,10 @@ local SHAPES = {
 }
 
 local R = N / 2 - 1         -- masks fill the texture
-local GLOW_H = N / 2 / 1.6  -- glows: the shape in the middle
-local GLOW_W = N * 0.11
+local GLOW_SCALE = 2         -- glows: the texture is 2x the shape (room to fade out)
+local GLOW_H = N / 2 / GLOW_SCALE
+local GLOW_REACH = N / 2 - GLOW_H - 2 -- the glow is fully gone 2 px before the edge
+
 for _, s in ipairs(SHAPES) do
 	local function inside(x, y) return 0.5 - s.sdf(x - C, y - C, R) end
 	write(s.mask, function(x, y) return 1, inside(x, y) end)
@@ -90,7 +92,8 @@ for _, s in ipairs(SHAPES) do
 	write("glow_" .. s.key, function(x, y)
 		local d = s.sdf(x - C, y - C, GLOW_H)
 		if d < 0 then return 1, math.max(0, 1 + d / 3) end
-		return 1, math.exp(-(d / GLOW_W) ^ 2)
+		local t = math.min(1, d / GLOW_REACH)
+		return 1, (1 - t) ^ 2.2 -- smooth, and exactly 0 before the texture edge (no cut)
 	end)
 	-- Inner shade: black, strongest at the shape's edge and fading inwards (depth on the icon).
 	write(s.mask .. "_shade", function(x, y)

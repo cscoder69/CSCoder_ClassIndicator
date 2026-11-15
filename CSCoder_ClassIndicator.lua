@@ -449,7 +449,7 @@ function Indicator.Style(f, class, name, isTarget)
 	if ring and db.borderStyle == "soft" then
 		SetTex(f.borderGlow, info.glow)
 		f.borderGlow:SetBlendMode("ADD")
-		f.borderGlow:SetSize(size * 1.45, size * 1.45)
+		f.borderGlow:SetSize(size * 1.75, size * 1.75)
 		f.borderGlow:SetVertexColor(cr, cg, cb, 0.55)
 		f.borderGlow:Show()
 	elseif ring and db.borderStyle == "frame" then
@@ -457,7 +457,7 @@ function Indicator.Style(f, class, name, isTarget)
 		f.ring:SetVertexColor(cr, cg, cb, 0.85)
 		SetTex(f.borderGlow, info.glow)
 		f.borderGlow:SetBlendMode("BLEND")
-		f.borderGlow:SetSize(size * 1.32, size * 1.32)
+		f.borderGlow:SetSize(size * 1.5, size * 1.5)
 		f.borderGlow:SetVertexColor(0, 0, 0, 0.9)
 		f.borderGlow:Show()
 	else
@@ -480,7 +480,7 @@ function Indicator.Style(f, class, name, isTarget)
 	if db.iconShadow then
 		SetTex(f.shadow, info.glow)
 		f.shadow:SetVertexColor(0, 0, 0, 1)
-		f.shadow:SetSize(size * 1.6, size * 1.6)
+		f.shadow:SetSize(size * 1.8, size * 1.8)
 		f.shadow:ClearAllPoints()
 		f.shadow:SetPoint("CENTER", f, "CENTER", 2, -2)
 		f.shadow:Show()
@@ -651,11 +651,11 @@ function Indicator.Style(f, class, name, isTarget)
 		badge:Hide()
 	end
 
-	-- Target glow: same shape as the icon, the texture is 1.6x the icon (make_shapes.lua).
+	-- Target glow: same shape as the icon; the glow texture is 2x its shape and fades to zero before its edge (make_shapes.lua).
 	if isTarget and db.targetGlow then
 		local c = db.glowColor
 		SetTex(f.glow, info.glow)
-		f.glow:SetSize(size * 1.6, size * 1.6)
+		f.glow:SetSize(size * 2, size * 2)
 		f.glow:SetVertexColor(c[1], c[2], c[3], 0.85)
 		f.glow:Show()
 		if f.glowAnim and not f.glowAnim:IsPlaying() then f.glowAnim:Play() end
