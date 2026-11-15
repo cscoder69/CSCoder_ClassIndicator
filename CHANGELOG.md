@@ -1,5 +1,11 @@
 # CS.Coder - Class Indicator
 
+## v1.0.2
+
+- **Battlegrounds:** enemy players now get their icon. Inside battlegrounds the game hides a player's class from addons; the class is now read from the battleground scoreboard instead (asked for as soon as a new player shows up).
+- The indicator never goes off screen anymore (a nameplate near the top edge used to push it out of sight).
+- New `/ci why`: shows what the game tells the addon about your target (helps with bug reports).
+
 ## v1.0.1
 
 - Same as 1.0.0, now published automatically (CurseForge and GitHub Releases).
