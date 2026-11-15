@@ -1,5 +1,9 @@
 # CS.Coder - Class Indicator
 
+## v1.0.1
+
+- Same as 1.0.0, now published automatically (CurseForge and GitHub Releases).
+
 ## v1.0.0
 
 - First release: the official class icon and the class name above enemy players' nameplates.
